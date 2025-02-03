@@ -1,0 +1,98 @@
+{% block main %}
+{% load static %}
+<meta name="theme-color" content="#7952b3">
+{% block prestyles %}{% endblock prestyles %}
+<link href="/fontawesome/css/all.css" rel="stylesheet" crossorigin="anonymous">
+<link href="{% static 'css/my3.css' %}" rel="stylesheet" crossorigin="anonymous">
+<link href="{% static 'css/my1.css' %}" rel="stylesheet" crossorigin="anonymous">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+{% include 'components/navbar.html' %}
+
+<style>
+    nav {
+        background-color: beige;
+        overflow: hidden;
+    }
+
+    nav a {
+        float: left;
+        display: block;
+        color: #f2f2f2;
+        text-align: center;
+        padding: 14px 16px;
+        text-decoration: none;
+    }
+
+    nav a:hover {
+        background-color: #ddd;
+        color: black;
+    }
+
+    .profile-button {
+        margin-right: 5px;
+        padding: 5px 10px;
+        display: inline-flex;
+        align-items: center;
+        border-radius: 25px;
+        border: 2px solid #28a745;
+        transition: background-color 0.3s, border-color 0.3s;
+    }
+
+    .profile-button:hover {
+        border-color: transparent;
+    }
+
+    .profile-image {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 2px solid #28a745;
+        transition: border-color 0.3s;
+    }
+
+    .profile-button:hover .profile-image {
+        border-color: white;
+    }
+
+</style>
+<div class="row d-flex justify-content-center">
+        <div class="col col-lg-9 col-xl-8">
+          <div class="card">
+            <div class="rounded-top text-white d-flex flex-row" style="background-color: #9370DB; height:200px;">
+              <div class="ms-4 mt-5 d-flex flex-column" style="width: 150px;">
+                <img src="{{ user.profile.image.url }}" alt="Generic placeholder image" class="img-fluid img-thumbnail mt-4 mb-2" style="width: 150px; z-index: 1; border-radius: 100%;">
+                  <a href="{% url 'django_app:profile_update' %}" type="button" class="btn btn-dark" data-mdb-ripple-color="dark" style="z-index: 1;">
+                  Edit profile
+                </a>
+              </div>
+              <div class="ms-3" style="margin-top: 130px;">
+                <h5>{{ user.username }} - {{ user.email }} - {{ user.profile.city }}</h5>
+                  <h5 style="color: gold;">Your points: {{ user.profile.points }}</h5>
+              </div>
+            </div>
+            <div class="p-4 text-black" style="background-color: #f8f9fa;">
+              <div class="d-flex justify-content-end text-center py-1">
+                <div>
+                  <p class="mb-1 h5">Статус:</p>
+                    {% if user.profile.is_eligible_for_testing %}
+    Допущен к тестированию
+{% else %}
+    Не допущен к тестированию
+{% endif %}
+                </div>
+              </div>
+            </div>
+            <div class="card-body p-4 text-black">
+              <div class="mb-5">
+                <p class="lead fw-normal mb-1">About</p>
+                <div class="p-4" style="background-color: #9370DB; border-radius: 35px;">
+                  <p class="font-italic mb-1" style="color: white;">{{ user.profile.description }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+{% endblock main %}

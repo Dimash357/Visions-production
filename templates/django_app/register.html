@@ -1,0 +1,183 @@
+{% load static %}
+{% block main %}
+    {% load app_django_extras %}
+    <link rel="apple-touch-icon" href="/docs/5.0/assets/img/favicons/apple-touch-icon.png" sizes="180x180">
+    <link rel="icon" href="/docs/5.0/assets/img/favicons/favicon-32x32.png" sizes="32x32" type="image/png">
+    <link rel="icon" href="/docs/5.0/assets/img/favicons/favicon-16x16.png" sizes="16x16" type="image/png">
+    <link rel="manifest" href="/docs/5.0/assets/img/favicons/manifest.json">
+    <link rel="mask-icon" href="/docs/5.0/assets/img/favicons/safari-pinned-tab.svg" color="#7952b3">
+    <link rel="icon" href="/docs/5.0/assets/img/favicons/favicon.ico">
+    <meta name="theme-color" content="#7952b3">
+    {% block prestyles %}{% endblock prestyles %}
+    <link href="signin.css" rel="stylesheet">
+    <link href="/css/bootstrap.css" rel="stylesheet" crossorigin="anonymous">
+    <link href="/fontawesome/css/all.css" rel="stylesheet" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+
+    <link href="{% static 'css/my1.css' %}" rel="stylesheet" crossorigin="anonymous">
+
+
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin-top: 50px;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+
+        .navbar {
+            background-color: #007bff;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .navbar .btn {
+            background-color: #28a745;
+            color: white;
+            border-radius: 5px;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+
+        .navbar .btn:hover {
+            background-color: #218838;
+        }
+
+        .form-label {
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-control {
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            padding: 12px;
+        }
+
+        .form-control:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+
+        .text-center {
+            margin-bottom: 30px;
+        }
+
+        .text-center h2 {
+            font-size: 36px;
+            color: #007bff;
+        }
+
+        .text-center p {
+            color: #777;
+        }
+
+        .back-button {
+            margin-bottom: 20px;
+            display: inline-block;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background-color: #6c757d;
+            color: white;
+            font-weight: bold;
+        }
+
+        .back-button:hover {
+            background-color: #5a6268;
+        }
+    </style>
+
+    <div class="text-center">
+        <a href="{% url 'django_app:login' %}" class="back-button">&#11013; Go back</a>
+        <h2>Creating new user</h2>
+        <p class="lead">Fill in the fields and click "Create"</p>
+    </div>
+
+    <div class="container">
+        <form method="POST" action="{% url 'django_app:register' %}" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="mb-3">
+                <label for="exampleInputEmail1" class="form-label">Name</label>
+                <input type="text" class="form-control" id="exampleInputUsername1" placeholder="Your username" required name="username" />
+                <div id="emailHelp" class="form-text">Пожалуйста введите ваше настоящее имя.</div>
+            </div>
+
+            <div class="mb-3">
+                <label for="exampleInputEmail1" class="form-label">Email address</label>
+                <input type="email" class="form-control" id="exampleInputEmail1" placeholder="Your email" required name="email" />
+                <div id="emailHelp" class="form-text">Мы никогда не делимся вашим email с кем то.</div>
+            </div>
+
+            <div class="mb-3">
+                <label for="exampleInputPassword1" class="form-label">Password</label>
+                <input type="password" class="form-control" id="exampleInputPassword1" placeholder="Your password" required name="password" />
+            </div>
+
+            <button type="submit" class="btn btn-primary">Create</button>
+            {% if error_message %}
+                <div class="alert alert-danger" role="alert" style="margin-top: 5px;">
+                    {{ error_message }}
+                </div>
+            {% endif %}
+        </form>
+    </div>
+{% endblock main %}
+
+
+
+{#{% load static %}#}
+{#{% block main %}#}
+{#    {% load app_django_extras %}#}
+{#        <link rel="apple-touch-icon" href="/docs/5.0/assets/img/favicons/apple-touch-icon.png" sizes="180x180">#}
+{#    <link rel="icon" href="/docs/5.0/assets/img/favicons/favicon-32x32.png" sizes="32x32" type="image/png">#}
+{#    <link rel="icon" href="/docs/5.0/assets/img/favicons/favicon-16x16.png" sizes="16x16" type="image/png">#}
+{#    <link rel="manifest" href="/docs/5.0/assets/img/favicons/manifest.json">#}
+{#    <link rel="mask-icon" href="/docs/5.0/assets/img/favicons/safari-pinned-tab.svg" color="#7952b3">#}
+{#    <link rel="icon" href="/docs/5.0/assets/img/favicons/favicon.ico">#}
+{#    <meta name="theme-color" content="#7952b3">#}
+{#    {% block prestyles %}{% endblock prestyles %}#}
+{#    <link href="signin.css" rel="stylesheet">#}
+{#    <link href="/css/bootstrap.css" rel="stylesheet" crossorigin="anonymous">#}
+{#    <link href="/fontawesome/css/all.css" rel="stylesheet" crossorigin="anonymous">#}
+{#    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">#}
+{#<div class="py-5 text-center">#}
+{#      <a href="{% url 'django_app:home' %}" class="btn btn-outline-primary" type="submit" style="padding-left: 50px; padding-right: 50px; margin: 3px;">&#11013; Go back</a>#}
+{#      <h2>Creating new user</h2>#}
+{#      <p class="lead">fill in the fields and click create</p>#}
+{#    </div>#}
+{#    <form method="POST" action="{% url "django_app:register" %}" enctype="multipart/form-data">#}
+{#    {% csrf_token %}#}
+{#  <div class="mb-3">#}
+{#    <label for="exampleInputEmail1" class="form-label">Email address</label>#}
+{#    <input type="text" class="form-control" id="exampleInputEmail1" aria-describedby="usernameHelp" placeholder="Ваш логин" required name="username"/>#}
+{#    <div id="emailHelp" class="form-text">We'll never share your email with anyone else.</div>#}
+{#  </div>#}
+{#  <div class="mb-3">#}
+{#    <label for="exampleInputPassword1" class="form-label">Password</label>#}
+{#    <input type="password" class="form-control" id="exampleInputPassword1" placeholder="Ваш пароль" required name="password"/>#}
+{#  </div>#}
+{#  <button type="submit" class="btn btn-primary">Создать</button>#}
+{#</form>#}
+{##}
+{#{% endblock main %}#}

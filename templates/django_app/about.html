@@ -1,0 +1,252 @@
+{% load static %}
+{% block prestyles %}{% endblock prestyles %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+
+
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous">
+<nav class="navbar navbar-expand-lg navbar-light" style="background-color: #f8f9fa; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 30px; margin: 10px;">
+    <div class="container-fluid">
+        <!-- Логотип -->
+        <div class="d-flex align-items-center">
+            <img src="{% static 'img/photo_2025-01-05_16-34-54.jpg' %}" class="img-fluid" style="width: 50px; height: 50px; border-radius: 100%; margin-right: 10px;">
+            <a class="navbar-brand fw-bold" href="{% url 'django_app:home_main' %}">VISIONS</a>
+        </div>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <!-- Ссылки -->
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'django_app:home_main' %}">Main</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'django_app:homework' %}">Homework</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'django_app:about' %}">About us</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://visions.kz/" target="_blank">Visions.kz</a>
+                </li>
+            </ul>
+
+            <!-- Профиль и кнопка выхода -->
+            {% if user.is_authenticated %}
+                <div class="d-flex align-items-center">
+                    <a href="{% url 'django_app:profile' %}" class="btn btn-outline-success d-flex align-items-center me-3" style="border-radius: 30px;">
+                        <img src="{{ user.profile.image.url }}" alt="Profile Image" class="rounded-circle me-2" style="width: 30px; height: 30px;">
+                        <u>{{ user.username }}</u>
+                    </a>
+                    <a href="{% url 'django_app:logout' %}" class="btn btn-danger" style="border-radius: 30px;">Logout</a>
+                </div>
+            {% else %}
+                <a href="{% url 'django_app:login' %}" class="btn btn-outline-primary" style="border-radius: 30px;">Login</a>
+            {% endif %}
+        </div>
+    </div>
+</nav>
+
+
+
+<style>
+    nav {
+        background-color: beige;
+        overflow: hidden;
+    }
+
+    nav a {
+        float: left;
+        display: block;
+        color: #f2f2f2;
+        text-align: center;
+        padding: 14px 16px;
+        text-decoration: none;
+    }
+
+    nav a:hover {
+        background-color: #ddd;
+        color: black;
+    }
+
+    .profile-button {
+        margin-right: 5px;
+        padding: 5px 10px;
+        display: inline-flex;
+        align-items: center;
+        border-radius: 25px;
+        border: 2px solid #28a745;
+        transition: background-color 0.3s, border-color 0.3s;
+    }
+
+    .profile-button:hover {
+        border-color: transparent;
+    }
+
+    .profile-image {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 2px solid #28a745;
+        transition: border-color 0.3s;
+    }
+
+    .profile-button:hover .profile-image {
+        border-color: white;
+    }
+
+</style>
+
+<style>
+    nav {
+        background-color: beige;
+        overflow: hidden;
+    }
+
+    nav a {
+        float: left;
+        display: block;
+        color: #f2f2f2;
+        text-align: center;
+        padding: 14px 16px;
+        text-decoration: none;
+    }
+
+    nav a:hover {
+        background-color: #ddd;
+        color: black;
+    }
+
+    .profile-button {
+        margin-right: 5px;
+        padding: 5px 10px;
+        display: inline-flex;
+        align-items: center;
+        border-radius: 25px;
+        border: 2px solid #28a745;
+        transition: background-color 0.3s, border-color 0.3s;
+    }
+
+    .profile-button:hover {
+        border-color: transparent;
+    }
+
+    .profile-image {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 2px solid #28a745;
+        transition: border-color 0.3s;
+    }
+
+    .profile-button:hover .profile-image {
+        border-color: white;
+    }
+
+</style>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>О нас - Visions.kz</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 20px 10%;
+            text-align: center;
+        }
+        main {
+            padding: 20px 10%;
+        }
+        section {
+            margin-bottom: 30px;
+        }
+        .rewards {
+            background-color: #e9f7ef;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .social-links a {
+            margin-right: 15px;
+            text-decoration: none;
+            color: #007bff;
+            font-weight: bold;
+        }
+            footer {
+                background-color: #333;
+                color: white;
+                text-align: center;
+                padding: 10px 0;
+            }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>О нас - Visions.kz</h1>
+    <p>Помогаем вам развиваться и расти в сфере IT!</p>
+</header>
+
+<main>
+    <section>
+        <h2>О нашей компании</h2>
+        <p>Visions.kz — это онлайн-школа для начинающих Scrum-мастеров, проектных менеджеров и лидеров, стремящихся к эффективному управлению командами. Мы создаем курсы, которые основаны на реальных кейсах и помогают студентам применять знания на практике.</p>
+    </section>
+
+    <section>
+        <h2>Почему выбирают нас?</h2>
+        <ul>
+            <li>Опытные менторы с международными сертификатами.</li>
+            <li>Индивидуальный подход к обучению каждого студента.</li>
+            <li>Практические занятия на реальных кейсах.</li>
+        </ul>
+    </section>
+
+    <section>
+        <h2>Наши предложения</h2>
+        <ul>
+            <li><strong>Курс Scrum Base:</strong> Полное погружение в Agile и Scrum, включая ценности и практики.</li>
+            <li><strong>Менторство:</strong> Личная работа с опытными коучами для вашего профессионального роста.</li>
+        </ul>
+    </section>
+
+
+
+    <section>
+        <p>Накопленные баллы можно обменять на бонусы:</p>
+        <ul class="rewards">
+            <li><h4><strong>3000 баллов — одна бесплатная встреча с ментором</strong></h4></li>
+            <li><h4><strong>3500 баллов — книга З. Шоховой - путь Scrum-мастера</strong></h4></li>
+        </ul>
+    </section>
+
+    <form >
+    <section>
+        <h2>Присоединяйтесь к нам и получите поинты!</h2>
+        <p>Подписывайтесь на нас в социальных сетях, чтобы быть в курсе всех новостей:</p>
+        <p class="social-links">
+            <a href="{% url 'django_app:check_subscription_telegram' %}" target="_blank">Telegram</a>
+            <a href="{% url 'django_app:check_subscription_instagram' %}" target="_blank">Instagram</a>
+            <a href="{% url 'django_app:check_subscription_facebook' %}" target="_blank">Facebook</a>
+        </p>
+    </section>
+        </form>
+</main>
+
+<footer>
+    <p>&copy; 2025 Visions.kz. Все права защищены.</p>
+</footer>
+
+</body>
+</html>
