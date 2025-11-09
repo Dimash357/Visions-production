@@ -1,0 +1,87 @@
+{% load static %}
+{% block prestyles %}{% endblock prestyles %}
+{% include 'components/navbar.html' %}
+
+<div class="container">
+    <div class="row">
+                <!-- Список пользователей -->
+                <div class="col-md-4">
+                    <h4 style="color: white">Пользователи</h4>
+                    <ul class="list-group">
+            {% for user in users %}
+                <li class="list-group-item d-flex justify-content-between align-items-center"
+                    {% if forloop.counter == 1 %}
+                        style="background-color: gold;"
+                    {% elif forloop.counter == 2 %}
+                        style="background-color: silver;"
+                    {% elif forloop.counter == 3 %}
+                        style="background-color: #cd7f32;"
+                    {% endif %}
+                >
+                    <span>{{ forloop.counter }}. {{ user.user.username }}</span>
+                    <span class="badge bg-primary rounded-pill">{{ user.points }}</span>
+                    {% if user.points > 2000 %}
+                        <span class="badge bg-success rounded-pill">Поздравляем, у вас больше 2000 очков!</span>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+                
+                </div>
+        
+                <!-- Уведомления -->
+        <div class="col-md-8">
+            <h4 style="color: white">Уведомления</h4>
+            <ul class="list-group">
+                {% for notification in notifications %}
+                <li class="list-group-item d-flex justify-content-between align-items-center notification-item" data-id="{{ notification.id }}" style="cursor: pointer;">
+                    <span>{{ notification.message }}</span>
+                    {% if not notification.is_read %}
+                    <span class="badge bg-danger rounded-circle notification-badge">1</span>
+                    {% endif %}
+                </li>
+                {% empty %}
+                <p class="text-center">Уведомления отсутствуют.</p>
+                {% endfor %}
+            </ul>
+        
+</div>
+    
+
+
+
+
+    <script>
+    document.querySelectorAll('.notification-item').forEach(item => {
+        item.addEventListener('click', function () {
+            const badge = this.querySelector('.notification-badge');
+            const notificationId = this.getAttribute('data-id');
+
+            if (badge) {
+                badge.remove();
+
+                // Отправляем AJAX-запрос
+                fetch(`/notifications/read/${notificationId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}', // CSRF токен для безопасности
+                        'Content-Type': 'application/json'
+                    }
+                }).then(response => {
+                    if (!response.ok) {
+                        console.error('Ошибка при обновлении уведомления');
+                    }
+                }).catch(error => {
+                    console.error('Ошибка сети:', error);
+                });
+            }
+        });
+    });
+</script>
+
+
+    </div>
+</div>
+
+{% include 'components/footer.html' %}
+

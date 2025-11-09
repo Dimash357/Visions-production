@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    command: gunicorn --bind 0.0.0.0:8000 django_settings.wsgi:application
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      SQLITE: "False"
+      POSTGRES_DB: "visions"
+      POSTGRES_USER: "olesya"
+      POSTGRES_PASSWORD: "91583256Dim"
+      POSTGRES_HOST: "db"
+      POSTGRES_PORT: "5432"
+
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: visions
+      POSTGRES_USER: olesya
+      POSTGRES_PASSWORD: 91583256Dim
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+
