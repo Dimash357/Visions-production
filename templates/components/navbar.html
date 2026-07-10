@@ -1,0 +1,158 @@
+{% load static %}
+{% block prestyles %}{% endblock prestyles %}
+
+<link href="{% static 'css/my1.css' %}?v=2" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
+
+<nav class="navbar navbar-expand-lg navbar-light">
+    <div class="container-fluid">
+        <!-- Логотип -->
+        <div class="d-flex align-items-center">
+            <img src="{% static 'img/photo_2025-01-05_16-34-54.jpg' %}" class="img-fluid logo-img">
+            <a class="navbar-brand fw-bold" href="{% url 'django_app:home_main' %}">VISIONS</a>
+        </div>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse justify-content-between" id="navbarNav">
+            <!-- Ссылки -->
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="{% url 'django_app:home_main' %}">Main</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'django_app:homework' %}">Homework</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'django_app:about' %}">About us</a></li>
+                <li class="nav-item"><a class="nav-link" href="https://visions.kz/" target="_blank">Visions.kz</a></li>
+            </ul>
+
+            <!-- Профиль и кнопка выхода -->
+            {% if user.is_authenticated %}
+                <div class="d-flex user-controls">
+                    <a href="{% url 'django_app:instructions' %}" class="btn btn-outline-primary profile-button">
+                        Instructions
+                    </a>
+                    <a href="{% url 'django_app:profile' %}" class="btn btn-outline-success profile-button">
+                        <img src="{{ user.profile.image.url }}" alt="Profile Image" class="rounded-circle profile-image">
+                        <u>{{ user.username }}</u>
+                    </a>
+                    <a href="{% url 'django_app:logout' %}" class="btn btn-danger logout-button">Logout</a>
+                </div>
+            {% else %}
+                <div class="auth-buttons">
+                    <a href="{% url 'django_app:login' %}" class="btn btn-outline-primary">Sign in</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</nav>
+
+<style>
+/* Фиксированная высота навбара */
+.navbar {
+    height: 70px;
+    background-color: #f8f9fa;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-radius: 30px;
+    margin: 10px;
+    display: flex;
+    align-items: center;
+}
+
+/* Ограничение ширины навбара */
+.navbar .container-fluid {
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    overflow: hidden;
+}
+
+/* Логотип */
+.logo-img {
+    width: 50px;
+    height: 50px;
+    border-radius: 100%;
+    margin-right: 10px;
+}
+
+/* Контейнер с пользователем и кнопками */
+.user-controls {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    gap: 10px;
+}
+
+/* Контейнер для кнопок входа */
+.auth-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-right: 15px;
+}
+
+/* Кнопки */
+.profile-button, .logout-button {
+    border-radius: 30px;
+    min-width: 120px;
+    text-align: center;
+}
+
+.profile-image {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid #28a745;
+    transition: border-color 0.3s;
+}
+
+.profile-button:hover .profile-image {
+    border-color: white;
+}
+
+/* Навигационные ссылки */
+.navbar-nav {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+/* Обработка переполнения */
+.navbar-collapse {
+    flex-wrap: nowrap !important;
+    overflow: hidden;
+}
+
+.nav-link:hover {
+    background-color: #ddd;
+    color: black;
+}
+
+/* Медиа-запросы */
+@media (max-width: 992px) {
+    .navbar {
+        height: auto;
+        padding: 10px;
+    }
+
+    .navbar-nav {
+        width: 100%;
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .user-controls {
+        flex-direction: column;
+        width: 100%;
+        text-align: center;
+    }
+
+    .profile-button, .logout-button {
+        width: 100%;
+    }
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>

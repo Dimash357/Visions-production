@@ -1,0 +1,282 @@
+{% load static %}
+{% load custom_filters %}
+{% block prestyles %}{% endblock prestyles %}
+{% include 'components/navbar.html' %}
+
+<style>
+    body {
+    opacity: 0;
+    animation: fadeIn 1s ease forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(1.5);
+        filter: blur(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+        filter: blur(0);
+    }
+}
+    .notification-container {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 10px;
+    }
+
+    .notification-container::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .notification-container::-webkit-scrollbar-thumb {
+        background: #bbb;
+        border-radius: 4px;
+    }
+
+    .notification-container::-webkit-scrollbar-track {
+        background: #f8f9fa;
+    }
+
+
+    section {
+            background-color: #fff;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    section:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 25px rgba(0, 0, 0, 0.12);
+    }
+
+    section h2 {
+            color: #007bff;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+    .social-links {
+            margin-top: 15px;
+        }
+
+    .social-links a {
+        display: inline-block;
+        background: #007bff;
+        color: white;
+        font-weight: 500;
+        padding: 10px 20px;
+        border-radius: 25px;
+        text-decoration: none;
+        margin-right: 10px;
+        transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    .social-links a:hover {
+        background: #0056b3;
+        transform: translateY(-2px);
+    }
+
+    @media (max-width: 768px) {
+        .list-group-item {
+            font-size: 14px;
+            padding: 8px;
+        }
+        .container.main-content {
+            padding: 10px;
+        }
+    }
+</style>
+
+<head>
+    <title>Visions - Homework page</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<div class="container main-content">
+    <div class="row">
+        <!-- Список пользователей -->
+        <div class="col-lg-4 col-md-6 col-sm-12 mb-3">
+            <!-- Кнопки фильтрации -->
+<div class="mb-4">
+    <a href="{% url 'django_app:home_main' %}"
+       class="btn {% if not filter_former %}btn-primary{% else %}btn-outline-primary{% endif %} me-2">
+        Пользователи
+    </a>
+    <a href="{% url 'django_app:home_main' %}?former=yes"
+       class="btn {% if filter_former == 'yes' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        Прошлые пользователи
+    </a>
+</div>
+
+<!-- Список пользователей -->
+<!-- Список пользователей -->
+<ul class="list-group">
+    {% for user in page_obj %}
+    <li class="list-group-item d-flex justify-content-between align-items-center"
+        {% if forloop.counter0 == 0 and page_obj.number == 1 %} style="background-color: gold;"
+        {% elif forloop.counter0 == 1 and page_obj.number == 1 %} style="background-color: silver;"
+        {% elif forloop.counter0 == 2 and page_obj.number == 1 %} style="background-color: #cd7f32;"
+        {% endif %}>
+
+        <span>
+            {% if forloop.counter0 == 0 and page_obj.number == 1 %}
+                🥇 {{ user.user.username|replace_underscore }}
+            {% elif forloop.counter0 == 1 and page_obj.number == 1 %}
+                🥈 {{ user.user.username|replace_underscore }}
+            {% elif forloop.counter0 == 2 and page_obj.number == 1 %}
+                🥉 {{ user.user.username|replace_underscore }}
+            {% else %}
+                {{ forloop.counter0|add:page_obj.start_index }}. {{ user.user.username|replace_underscore }}
+
+            {% endif %}
+        </span>
+
+        <span class="badge bg-primary rounded-pill">{{ user.points }}</span>
+
+        {% if user.points == 3000 %}
+            <span class="badge bg-success rounded-pill">Поздравляем, у вас 3000 очков!</span>
+        {% endif %}
+    </li>
+    {% empty %}
+    <li class="list-group-item text-muted">Нет пользователей по этому фильтру.</li>
+    {% endfor %}
+</ul>
+
+<!-- 🔽 Блок пагинации -->
+<div class="d-flex justify-content-center align-items-center mt-3 gap-2">
+    {% if page_obj.has_previous %}
+        <a class="btn btn-primary"
+           href="?page={{ page_obj.previous_page_number }}{% if filter_former %}&former={{ filter_former }}{% endif %}">
+            ←
+        </a>
+    {% else %}
+        <button class="btn btn-secondary" disabled>←</button>
+    {% endif %}
+
+    <span>Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span>
+
+    {% if page_obj.has_next %}
+        <a class="btn btn-primary"
+           href="?page={{ page_obj.next_page_number }}{% if filter_former %}&former={{ filter_former }}{% endif %}">
+            →
+        </a>
+    {% else %}
+        <button class="btn btn-secondary" disabled>→</button>
+    {% endif %}
+</div>
+
+
+        </div>
+
+        <!-- Уведомления -->
+        <div class="col-lg-8 col-md-6 col-sm-12">
+            <h4 class="text-white">Уведомления</h4>
+            <div class="notification-container">
+                <ul class="list-group notification-list">
+                    {% for notification in notifications %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center notification-item"
+                        data-id="{{ notification.id }}" style="cursor: pointer;">
+                        <span>{{ notification.message }}</span>
+                        {% if not notification.is_read %}
+                        <span class="badge bg-danger rounded-circle notification-badge">1</span>
+                        {% endif %}
+                    </li>
+                    {% empty %}
+                    <p class="text-center text-white">Уведомления отсутствуют.</p>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Раздел "Как зарабатывать баллы?" -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Как зарабатывать баллы?</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group">
+                        <li class="list-group-item">✅ За выполнение одного домашнего задания — по 300 поинтов за каждое</li>
+                        <li class="list-group-item">✅ За тестирование: отлично(27-30 баллов) - 300 поинтов; хорошо(24-26 баллов) - 200 поинтов; удовлетворительно(ниже 24 баллов) - 100 поинтов</li>
+                        <li class="list-group-item">✅ За ассесмент — 300 поинтов</li>
+                        <li class="list-group-item">✅ Подпишитесь на наши страницы в Telegram, Instagram и Facebook — и получите по 100 поинтов за каждую подписку!</li>
+                        <li class="list-group-item">✅ За положительный отзыв о курсе в сторис(Instagram) — 100 поинтов (проверяется админом)</li>
+                        <li class="list-group-item">✅ За положительный отзыв о курсе в LinkedIn — 200 поинтов (проверяется админом)</li>
+                        <li class="list-group-item">✅ Приведи друга на курс — 500 поинтов (проверяется админом)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!--{% if user.is_authenticated %}-->
+<!--<div class="container mt-5">-->
+<!--    <div class="row justify-content-center">-->
+<!--        <div class="col-lg-8 col-md-10 col-sm-12">-->
+<!--    <section class="mt-5">-->
+<!--        <h2>Присоединяйтесь к нам и получайте поинты!</h2>-->
+<!--        <p>Подписывайтесь на нас в социальных сетях:</p>-->
+<!--        <p class="social-links">-->
+<!--            <a href="{% url 'django_app:check_subscription_telegram' %}" target="_blank">Telegram</a>-->
+<!--            <a href="{% url 'django_app:check_subscription_instagram' %}" target="_blank">Instagram</a>-->
+<!--            <a href="{% url 'django_app:check_subscription_facebook' %}" target="_blank">Facebook</a>-->
+<!--            <a href="{% url 'django_app:check_subscription_linkedn' %}" target="_blank">Linkedn</a>-->
+<!--            <a href="{% url 'django_app:check_subscription_youtube' %}" target="_blank">Youtube</a>-->
+<!--        </p>-->
+<!--    </section>-->
+<!--        </div>-->
+<!--    </div>-->
+<!--</div>-->
+<!--    {% else %}-->
+<!--<div class="container mt-5">-->
+<!--    <div class="row justify-content-center">-->
+<!--        <div class="col-lg-8 col-md-10 col-sm-12">-->
+<!--    <section class="mt-5">-->
+<!--        <h2>Войдите или зарегистрируйтесь</h2>-->
+<!--        <p>Чтобы получать поинты и подписки на соцсети — войдите в аккаунт!</p>-->
+<!--        <a href="{% url 'django_app:login' %}" class="btn1">Войти</a>-->
+<!--    </section>-->
+<!--        </div>-->
+<!--    </div>-->
+<!--</div>-->
+<!--    {% endif %}-->
+
+<script>
+    document.querySelectorAll('.notification-item').forEach(item => {
+        item.addEventListener('click', function () {
+            const badge = this.querySelector('.notification-badge');
+            const notificationId = this.getAttribute('data-id');
+
+            if (badge) {
+                badge.remove();
+                fetch(`/notifications/read/${notificationId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'Content-Type': 'application/json'
+                    }
+                }).then(response => {
+                    if (!response.ok) {
+                        console.error('Ошибка при обновлении уведомления');
+                    }
+                }).catch(error => {
+                    console.error('Ошибка сети:', error);
+                });
+            }
+        });
+    });
+</script>
+
+{% include 'components/footer.html' %}

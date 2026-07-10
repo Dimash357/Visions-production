@@ -1,0 +1,362 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    overflow: hidden;
+    font-family: 'Segoe UI', sans-serif;
+    background: #030006;
+}
+
+.cyber-bg {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+
+    background:
+        radial-gradient(circle at center,
+            rgba(125, 0, 255, 0.35) 0%,
+            rgba(50, 0, 80, 0.2) 25%,
+            transparent 60%),
+        linear-gradient(
+            to bottom,
+            #180021 0%,
+            #080010 45%,
+            #02030a 100%
+        );
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Грид */
+.cyber-bg::before {
+    content: "";
+
+    position: absolute;
+    bottom: -30%;
+    left: -50%;
+
+    width: 200%;
+    height: 100%;
+
+    background-image:
+        linear-gradient(rgba(255,0,255,.15) 2px, transparent 2px),
+        linear-gradient(90deg, rgba(0,255,255,.15) 2px, transparent 2px);
+
+    background-size: 90px 90px;
+
+    transform: perspective(700px) rotateX(70deg);
+
+    animation: gridMove 5s linear infinite;
+}
+
+@keyframes gridMove {
+    from {
+        background-position: 0 0;
+    }
+
+    to {
+        background-position: 0 90px;
+    }
+}
+
+/* Туман */
+.cyber-bg::after {
+    content: "";
+
+    position: absolute;
+    inset: 0;
+
+    background:
+        radial-gradient(
+            circle at center,
+            rgba(255,0,255,.05),
+            transparent 70%
+        );
+
+    animation: fog 10s ease-in-out infinite alternate;
+}
+
+@keyframes fog {
+    from {
+        transform: scale(1);
+        opacity: .4;
+    }
+
+    to {
+        transform: scale(1.2);
+        opacity: .8;
+    }
+}
+
+.content {
+    position: relative;
+    z-index: 5;
+    text-align: center;
+}
+
+/* Заголовок */
+
+h1 {
+    position: relative;
+
+    font-size: clamp(60px, 8vw, 120px);
+    font-weight: 900;
+
+    color: #f5ffff;
+
+    letter-spacing: 6px;
+    text-transform: uppercase;
+
+    text-shadow:
+        0 0 10px #00ffff,
+        0 0 25px #00ffff,
+        0 0 60px #ff00ff;
+
+    animation: cleanGlitch 8s infinite;
+}
+
+/* Редкие глюки */
+
+h1::before,
+h1::after {
+    content: attr(data-text);
+
+    position: absolute;
+    inset: 0;
+
+    opacity: 0;
+    pointer-events: none;
+}
+
+h1::before {
+    color: #ff00d4;
+    text-shadow: -4px 0 #ff00d4;
+
+    animation: glitchPink 8s infinite;
+}
+
+h1::after {
+    color: #00ffff;
+    text-shadow: 4px 0 #00ffff;
+
+    animation: glitchBlue 8s infinite;
+}
+
+@keyframes cleanGlitch {
+
+    0%,
+    89%,
+    100% {
+        transform: translate(0);
+        filter: none;
+    }
+
+    90% {
+        transform: translate(-2px, 1px);
+    }
+
+    91% {
+        transform: translate(3px, -1px);
+        filter: contrast(140%);
+    }
+
+    92% {
+        transform: translate(0);
+        filter: none;
+    }
+}
+
+@keyframes glitchPink {
+
+    0%,
+    88%,
+    100% {
+        opacity: 0;
+    }
+
+    89% {
+        opacity: .8;
+        clip-path: inset(15% 0 65% 0);
+        transform: translate(-8px, -2px);
+    }
+
+    90% {
+        opacity: .6;
+        clip-path: inset(50% 0 25% 0);
+        transform: translate(6px, 2px);
+    }
+
+    91% {
+        opacity: .7;
+        clip-path: inset(70% 0 8% 0);
+        transform: translate(-5px, 1px);
+    }
+
+    92% {
+        opacity: 0;
+    }
+}
+
+@keyframes glitchBlue {
+
+    0%,
+    88%,
+    100% {
+        opacity: 0;
+    }
+
+    89% {
+        opacity: .8;
+        clip-path: inset(65% 0 15% 0);
+        transform: translate(8px, 2px);
+    }
+
+    90% {
+        opacity: .6;
+        clip-path: inset(25% 0 60% 0);
+        transform: translate(-7px, -1px);
+    }
+
+    91% {
+        opacity: .7;
+        clip-path: inset(40% 0 35% 0);
+        transform: translate(5px, 2px);
+    }
+
+    92% {
+        opacity: 0;
+    }
+}
+
+/* Подпись */
+
+p {
+    margin-top: 25px;
+
+    color: rgba(255,255,255,.8);
+
+    font-size: 20px;
+    letter-spacing: 4px;
+
+    text-shadow:
+        0 0 10px #ff00ff;
+}
+
+/* Кнопка как в игре */
+
+.btn {
+    position: fixed;
+
+    right: 50px;
+    bottom: 40px;
+
+    z-index: 50;
+
+    min-width: 240px;
+
+    padding: 18px 35px;
+
+    text-decoration: none;
+
+    color: #00ffff;
+    font-size: 18px;
+    font-weight: 700;
+
+    letter-spacing: 3px;
+    text-transform: uppercase;
+
+    border: 2px solid #00ffff;
+
+    background:
+        rgba(0, 10, 20, .85);
+
+    box-shadow:
+        0 0 15px #00ffff,
+        inset 0 0 15px rgba(0,255,255,.2);
+
+    transition: .3s;
+}
+
+.btn::before {
+    content: "> ";
+    animation: blink .8s infinite;
+}
+
+.btn:hover {
+    transform: translateX(-8px);
+
+    background: #00ffff;
+    color: black;
+
+    box-shadow:
+        0 0 20px #00ffff,
+        0 0 60px #00ffff;
+}
+
+@keyframes blink {
+
+    0%,
+    50% {
+        opacity: 1;
+    }
+
+    51%,
+    100% {
+        opacity: 0;
+    }
+}
+
+/* Системные надписи */
+
+.hud-left {
+    position: absolute;
+    top: 40px;
+    left: 40px;
+
+    color: #00ffff;
+    font-size: 14px;
+
+    letter-spacing: 2px;
+
+    z-index: 10;
+}
+
+.hud-right {
+    position: absolute;
+    top: 40px;
+    right: 40px;
+
+    color: #ff00ff;
+    font-size: 14px;
+
+    text-align: right;
+
+    letter-spacing: 2px;
+
+    z-index: 10;
+}
+
+/* CRT */
+
+.scanlines {
+    position: absolute;
+    inset: 0;
+
+    z-index: 20;
+    pointer-events: none;
+
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            rgba(255,255,255,.02),
+            rgba(255,255,255,.02) 1px,
+            transparent 1px,
+            transparent 6px
+        );
+}

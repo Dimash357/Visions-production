@@ -1,0 +1,43 @@
+{% load static %}
+{% block prestyles %}{% endblock prestyles %}
+{% include 'components/navbar.html' %}
+<h2>Панель администратора</h2>
+
+<ul class="list-group">
+    {% for user in users %}
+    <li class="list-group-item d-flex justify-content-between align-items-center"
+        {% if forloop.counter == 1 %} style="background-color: gold;"
+        {% elif forloop.counter == 2 %} style="background-color: silver;"
+        {% elif forloop.counter == 3 %} style="background-color: #cd7f32;"
+        {% endif %}>
+
+        <!-- Имя пользователя с номером -->
+        <span>
+            {% if forloop.counter == 1 %}
+                🥇 {{ user.user.username }}
+            {% elif forloop.counter == 2 %}
+                🥈 {{ user.user.username }}
+            {% elif forloop.counter == 3 %}
+                🥉 {{ user.user.username }}
+            {% else %}
+                {{ forloop.counter }}. {{ user.user.username }}
+            {% endif %}
+        </span>
+
+        <!-- Очки -->
+        <span class="badge bg-primary rounded-pill">{{ user.points }}</span>
+    </li>
+    {% empty %}
+    <li class="list-group-item text-muted">Нет пользователей по этому фильтру.</li>
+    {% endfor %}
+</ul>
+
+        {% for task in tasks %}
+            <div style="margin-left: 20px;">
+                <p>Задание: {{ task.title }}</p>
+                <p>Описание: {{ task.description }}</p>
+                <p>Статус: {{ task.status }}</p>
+
+        {% endfor %}
+    </div>
+

@@ -1,0 +1,84 @@
+{% load static %}
+{% block prestyles %}{% endblock prestyles %}
+{% include 'components/navbar.html' %}
+
+<head>
+    <title>Homework</title>
+</head>
+
+<div class="container mt-4">
+    <h2 class="text-center mb-4">Ваши задания</h2>
+    <div class="row">
+        {% for task in tasks %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="card-title text-center text-primary">{{ task.title }}</h5>
+                    <p class="card-text text-muted text-center">
+                        {{ task.description|default:"Нет описания" }}
+                    </p>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <a href="{{ task.file.url }}" class="btn btn-primary btn-sm" download>
+                            Скачать
+                        </a>
+                        {% if not task.is_completed and task.status != "pending" and task.status != "completed" %}
+                        <form action="{% url 'django_app:upload_task' task.id %}" method="post" enctype="multipart/form-data" style="margin-left: 35px">
+                            {% csrf_token %}
+                            <input type="file" name="attachment" required>
+                            <button type="submit" class="btn btn-outline-success btn-sm">Прикрепить</button>
+                        </form>
+                        {% endif %}
+                    </div>
+
+                    {% if task.extended_deadline %}
+                    <div class="text-info">Продленный дедлайн: {{ task.extended_deadline }}</div>
+                    {% else %}
+                    <div>📅 Дедлайн: {{ task.deadline }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Блок статусов -->
+                {% if task.status == "completed" %}
+                <div class="card-footer bg-success text-white text-center">
+                    ✅ Выполнено +300 points
+                </div>
+                {% elif task.status == "overdue" %}
+                <div class="card-footer bg-danger text-white text-center">
+                    ❌ Просрочено
+                </div>
+                {% elif task.status == "process" %}
+                <div class="card-footer bg-secondary text-white text-center">
+                    Не выполнено
+                </div>
+                {% elif task.status == "rejected" %}
+                <div class="card-footer bg-warning text-white text-center">
+                    📝 На доработке
+                    <br>
+                    📝 Причина: {{ task.rejection_reason }}
+                </div>
+                {% elif task.status == "deadline_extended" %}
+                <div class="card-footer bg-info text-white text-center">
+                    ⏳ Срок продлен до {{ task.extended_deadline }}
+                    <br>
+                    📝 Причина: {{ task.rejection_reason }}
+                </div>
+                {% else %}
+                <div class="card-footer bg-warning text-dark text-center">
+                    ⏳ Ожидает проверки
+                    {% if task.user_response_file %}
+                    <br>
+                    <a href="{{ task.user_response_file.url }}" target="_blank" class="btn btn-light btn-sm mt-1">
+                        📥 Ваш ответ
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <p class="text-center">Задания отсутствуют.</p>
+        {% endfor %}
+    </div>
+</div>
+
+{% include 'components/footer.html' %}

@@ -1,0 +1,126 @@
+{% load static %}
+{% block prestyles %}{% endblock prestyles %}
+{% include 'components/navbar.html' %}
+
+
+<!--<link href="{% static 'css/my1.css' %}" rel="stylesheet" crossorigin="anonymous">-->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
+
+
+
+<style>
+    body {
+      font-family: "Segoe UI", Roboto, sans-serif;
+      background-color: #f0f4fa;
+      margin: 0;
+      padding: 0;
+      line-height: 1.6;
+      color: #333;
+    }
+
+    header {
+      background: linear-gradient(135deg, #31a5ea, #e8821b, #ef192a);
+      color: white;
+      padding: 30px 20px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 2rem;
+      letter-spacing: 1px;
+    }
+
+    main {
+      margin: 30px auto;
+      padding: 0 20px;
+    }
+
+    section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 25px;
+      margin-bottom: 25px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      transition: transform 0.2s ease;
+    }
+
+    section:hover {
+      transform: translateY(-3px);
+    }
+
+    section h2 {
+      font-size: 1.4rem;
+      color: #1d4ed8;
+      margin-top: 0;
+    }
+
+    p {
+      margin-bottom: 15px;
+    }
+
+    .img1 {
+      max-width: 100%;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      margin: 15px 0;
+    }
+
+    strong {
+      color: #1d4ed8;
+    }
+</style>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instructions</title>
+</head>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+<body>
+
+<header>
+    <h1>Инструкция по сайту</h1>
+</header>
+
+<main>
+    <section>
+        <h2>1. Как войти на сайт</h2>
+        <p>Чтобы войти на сайт, нажмите <strong>Sign in</strong> в верхнем правом углу. Затем введите логин и пароль, которые мы вам выдали, и нажмите <strong>Login</strong>.</p>
+    </section>
+
+    <section>
+        <h2>2. Как проверить домашние задания</h2>
+        <p>После входа перейдите в раздел <strong>Homework</strong>. Здесь отображается список заданий, которые нужно выполнить. Примерно так это выглядит: </p>
+        <img class="img1" src="{% static 'img/photo_study1.jpg' %}" alt="Страница домашних заданий" style="max-width:100%; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.2);">
+        <p>Чтобы посмотреть задание, просто нажмите кнопку <strong>«Скачать».</strong></p>
+        <p>Чтобы прикрепить свое задание, выберите файл и нажмите <strong>«Прикрепить».</strong>После этого иконка изменится — это значит, что файл успешно загружен.</p>
+        <img class="img1" src="{% static 'img/photo_study2.jpg' %}" alt="Страница домашних заданий" style="max-width:100%; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.2);">
+        <strong>Поздравляем — ваше первое задание загружено! Отличное начало.</strong>
+
+    </section>
+
+    <section>
+        <h2>3. Домашние задание на доработке</h2>
+        <p>Если вы увидели такую иконку: </p>
+        <img class="img1" src="{% static 'img/photo_study3.jpg' %}" alt="Страница домашних заданий" style="max-width:100%; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.2);">
+        <p>Не переживайте — это просто значит, что в задании есть моменты, которые нужно немного скорректировать.</p>
+        <p>Мы прикрепим файл с отмеченными местами, где нужно внести правки. Вам останется только нажать кнопку «Скачать», чтобы открыть его.</p>
+
+
+    </section>
+
+    <section>
+        <h2>3. Как редактировать профиль</h2>
+        <p>Чтобы изменить информацию о себе, нажмите на изображение профиля в правом верхнем углу и выберите <strong>Profile</strong>. Здесь вы можете изменить фото, имя и другие данные.</p>
+        <img class="img1" src="{% static 'img/' %}" alt="Страница профиля" style="max-width:100%; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.2);">
+    </section>
+</main>
+
+{% include 'components/footer.html' %}
+
+</body>
+</html>

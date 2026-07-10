@@ -1,0 +1,320 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome To Scrum</title>
+
+    <link rel="stylesheet" href="{% static 'static/css/welcome.css' %}">
+</head>
+<body>
+
+<style>
+    *{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    overflow:hidden;
+    background:#000;
+    font-family:'Segoe UI',sans-serif;
+}
+
+.cyber-bg{
+    position:relative;
+    width:100vw;
+    height:100vh;
+    overflow:hidden;
+
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+/* ФОН */
+
+.cyber-bg::before{
+    content:"";
+
+    position:absolute;
+    inset:-30px;
+
+    background-image:url("/static/img/piqsels.com-id-olzqm.jpg");
+    background-size:cover;
+    background-position:center;
+    background-repeat:no-repeat;
+
+    filter:blur(8px) brightness(.55);
+    transform:scale(1.08);
+
+    z-index:0;
+}
+
+/* затемнение */
+
+.overlay{
+    position:absolute;
+    inset:0;
+
+    background:
+    radial-gradient(
+        circle at center,
+        rgba(0,0,0,.15),
+        rgba(0,0,0,.65)
+    );
+
+    z-index:1;
+}
+
+/* контент */
+
+.content{
+    position:relative;
+    z-index:5;
+
+    text-align:center;
+
+    transform:translateY(-60px);
+}
+
+/* ЗАГОЛОВОК */
+
+h1{
+    position:relative;
+
+    font-size:clamp(80px,9vw,160px);
+
+    font-weight:700;
+
+    letter-spacing:8px;
+    text-transform:uppercase;
+
+    color:white;
+
+    text-shadow:
+        0 0 10px #00ffff,
+        0 0 25px #00ffff,
+        0 0 45px #00ffff,
+        0 0 80px #ff00ff;
+
+    animation:mainGlitch 5s infinite;
+}
+
+h1::before,
+h1::after{
+    content:attr(data-text);
+
+    position:absolute;
+    inset:0;
+
+    opacity:0;
+
+    pointer-events:none;
+}
+
+h1::before{
+    color:#ff00d4;
+    text-shadow:-5px 0 #ff00d4;
+
+    animation:glitchPink 5s infinite;
+}
+
+h1::after{
+    color:#00ffff;
+    text-shadow:5px 0 #00ffff;
+
+    animation:glitchBlue 5s infinite;
+}
+
+/* редкие глюки */
+
+@keyframes mainGlitch{
+
+    0%,94%,100%{
+        transform:none;
+    }
+
+    95%{
+        transform:translate(-3px,2px);
+    }
+
+    96%{
+        transform:translate(4px,-2px);
+    }
+
+    97%{
+        transform:none;
+    }
+}
+
+@keyframes glitchPink{
+
+    0%,94%,100%{
+        opacity:0;
+    }
+
+    95%{
+        opacity:.8;
+        clip-path:inset(12% 0 70% 0);
+        transform:translate(-12px,-2px);
+    }
+
+    96%{
+        opacity:.6;
+        clip-path:inset(60% 0 20% 0);
+        transform:translate(10px,2px);
+    }
+
+    97%{
+        opacity:0;
+    }
+}
+
+@keyframes glitchBlue{
+
+    0%,94%,100%{
+        opacity:0;
+    }
+
+    95%{
+        opacity:.8;
+        clip-path:inset(65% 0 12% 0);
+        transform:translate(12px,2px);
+    }
+
+    96%{
+        opacity:.6;
+        clip-path:inset(25% 0 55% 0);
+        transform:translate(-10px,-2px);
+    }
+
+    97%{
+        opacity:0;
+    }
+}
+
+/* КНОПКА */
+
+.btn{
+    position:fixed;
+
+    right:50px;
+    bottom:40px;
+
+    z-index:100;
+
+    padding:18px 38px;
+
+    min-width:260px;
+
+    text-align:center;
+    text-decoration:none;
+
+    color:#00ffff;
+
+    font-size:18px;
+    font-weight:700;
+
+    letter-spacing:3px;
+    text-transform:uppercase;
+
+    border:2px solid #00ffff;
+
+    background:rgba(0,0,0,.55);
+
+    box-shadow:
+        0 0 15px #00ffff,
+        inset 0 0 15px rgba(0,255,255,.2);
+
+    transition:.3s;
+}
+
+.btn::before{
+    content:"> ";
+}
+
+.btn:hover{
+
+    background:#00ffff;
+    color:#000;
+
+    transform:translateX(-8px);
+
+    box-shadow:
+        0 0 25px #00ffff,
+        0 0 60px #00ffff;
+}
+
+/* CRT ЭФФЕКТ */
+
+.scanlines{
+    position:absolute;
+    inset:0;
+
+    pointer-events:none;
+
+    z-index:50;
+
+    background:
+    repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,.015),
+        rgba(255,255,255,.015) 1px,
+        transparent 1px,
+        transparent 6px
+    );
+}
+
+body {
+    overflow: hidden;
+    background: #000;
+    font-family: 'Segoe UI', sans-serif;
+
+    opacity: 1;
+    transition: opacity 0.8s ease;
+}
+
+body.fade-out {
+    opacity: 0;
+}
+</style>
+
+<div class="cyber-bg">
+
+    <div class="overlay"></div>
+
+    <div class="content">
+        <h1 data-text="WELCOME TO SCRUM">
+            WELCOME TO SCRUM
+        </h1>
+    </div>
+
+    <a href="{% url 'django_app:login' %}" class="btn" id="enterBtn">
+        ENTER SYSTEM
+    </a>
+
+    <div class="scanlines"></div>
+
+</div>
+
+<script>
+document.getElementById('enterBtn').addEventListener('click', function(e) {
+
+    e.preventDefault();
+
+    const url = this.href;
+
+    document.body.classList.add('fade-out');
+
+    setTimeout(() => {
+        window.location.href = url;
+    }, 800);
+
+});
+</script>
+
+</body>
+</html>
