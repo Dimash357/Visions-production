@@ -1,0 +1,16 @@
+# Секреты, данные и локальные артефакты не должны попадать в образ
+.env
+.env.*
+!.env.example
+db.sqlite3
+db.sqlite3-journal
+media/
+.git/
+.cache/
+**/__pycache__/
+*.py[cod]
+venv/
+.venv/
+.idea/
+.vscode/
+*.log

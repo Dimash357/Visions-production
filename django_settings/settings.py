@@ -16,50 +16,116 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
+from django.core.exceptions import ImproperlyConfigured
+from decouple import Csv
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config("SECRET_KEY", default="dummy_secret_key")
+# --- Core / secrets (все секреты только из окружения или .env) ---
+DEBUG = config("DEBUG", default=False, cast=bool)
 
-# Время жизни сессии (30 минут = 1800 секунд)
-SESSION_TIMEOUT = 5400  # 90 минут
+SECRET_KEY = config("SECRET_KEY", default="")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "insecure-dev-only-key"
+    else:
+        raise ImproperlyConfigured("SECRET_KEY must be set when DEBUG is off")
+
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS",
+    default="127.0.0.1,localhost,visions-hw.kz,www.visions-hw.kz,185.146.3.36",
+    cast=Csv(),
+)
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    default="https://visions-hw.kz,https://www.visions-hw.kz",
+    cast=Csv(),
+)
+
+# --- Sessions ---
+SESSION_TIMEOUT = config("SESSION_TIMEOUT", default=5400, cast=int)  # 90 минут бездействия
 SESSION_COOKIE_AGE = SESSION_TIMEOUT
-
-# Закрытие сессии при закрытии браузера
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-
-# Удаление сессии после бездействия (например, 30 минут)
 SESSION_SAVE_EVERY_REQUEST = True
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_USE_TLS = True
-EMAIL_PORT = 587
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_HOST_USER = 'son090984@gmail.com'
-EMAIL_HOST_PASSWORD = 'hczmntmgqjujpper'
-
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = [
-    '127.0.0.1',
-    'localhost',
-    'visions-hw.kz',
-    'www.visions-hw.kz',
-    '185.146.3.36',
-]
-
-CSRF_TRUSTED_ORIGINS = [
-    "https://visions-hw.kz",
-    "https://www.visions-hw.kz",
-]
-
+# --- E-mail ---
+EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = config("EMAIL_HOST", default="smtp.gmail.com")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=15, cast=int)
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default=EMAIL_HOST_USER or "webmaster@localhost")
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+# Кому уходят уведомления о загруженных заданиях (через запятую)
+TASK_NOTIFY_EMAILS = config("TASK_NOTIFY_EMAILS", default=EMAIL_HOST_USER, cast=Csv())
 
 DEBUG_LOG = False
 
-TELEGRAM_BOT_TOKEN = ""
+TELEGRAM_BOT_TOKEN = config("TELEGRAM_BOT_TOKEN", default="")
+
+# --- Production security (включается автоматически при DEBUG=False) ---
+if config("USE_X_FORWARDED_PROTO", default=False, cast=bool):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=False, cast=bool)
+SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=not DEBUG, cast=bool)
+CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=not DEBUG, cast=bool)
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=0, cast=int)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = config("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=False, cast=bool)
+SECURE_HSTS_PRELOAD = False
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+X_FRAME_OPTIONS = "DENY"
+
+# Отдавать /static/ и публичные /media/ через Django (только если перед приложением нет nginx)
+SERVE_FILES_WITH_DJANGO = config("SERVE_FILES_WITH_DJANGO", default=DEBUG, cast=bool)
+# Для nginx: внутренний префикс X-Accel-Redirect для приватных файлов (например "/protected-media/")
+PROTECTED_MEDIA_ACCEL_PREFIX = config("PROTECTED_MEDIA_ACCEL_PREFIX", default="")
+
+# --- Uploads ---
+TASK_UPLOAD_MAX_MB = config("TASK_UPLOAD_MAX_MB", default=20, cast=int)
+TASK_UPLOAD_EXTENSIONS = config(
+    "TASK_UPLOAD_EXTENSIONS",
+    default=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf,.odt,.ods,.odp,.csv,.png,.jpg,.jpeg,.zip",
+    cast=Csv(),
+)
+PROFILE_IMAGE_MAX_MB = config("PROFILE_IMAGE_MAX_MB", default=5, cast=int)
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 200
+FILE_UPLOAD_PERMISSIONS = 0o640
+
+# --- Brute-force protection ---
+LOGIN_FAILURE_LIMIT = config("LOGIN_FAILURE_LIMIT", default=5, cast=int)        # на логин
+LOGIN_IP_FAILURE_LIMIT = config("LOGIN_IP_FAILURE_LIMIT", default=20, cast=int)  # на IP
+LOGIN_LOCKOUT_SECONDS = config("LOGIN_LOCKOUT_SECONDS", default=900, cast=int)
+# Доверять X-Forwarded-For только если приложение стоит за своим reverse proxy
+TRUST_X_FORWARDED_FOR = config("TRUST_X_FORWARDED_FOR", default=False, cast=bool)
+
+# Начислять ли баллы за подписки автоматически (подписку проверить нельзя)
+SOCIAL_POINTS_AUTO_AWARD = config("SOCIAL_POINTS_AUTO_AWARD", default=True, cast=bool)
+
+# Общий для всех gunicorn-воркеров кеш (нужен для блокировки перебора паролей)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": config("CACHE_DIR", default=str(BASE_DIR / ".cache" / "django")),
+    }
+}
+
+LOGIN_URL = "django_app:login"
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "loggers": {
+        "django_app": {"handlers": ["console"], "level": config("APP_LOG_LEVEL", default="INFO")},
+        "django.security": {"handlers": ["console"], "level": "WARNING"},
+    },
+}
 
 # Application definition
 
@@ -112,6 +178,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        # SQLite не поддерживает SELECT ... FOR UPDATE. IMMEDIATE берёт блокировку записи
+        # в начале транзакции и ждёт до timeout вместо мгновенного «database is locked».
+        'OPTIONS': {'transaction_mode': 'IMMEDIATE', 'timeout': 20},
     }
 }
 

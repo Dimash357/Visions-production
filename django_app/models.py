@@ -42,66 +42,88 @@ class Task(models.Model):
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='process')
 
-    def save(self, *args, **kwargs):
-        from django.utils import timezone
+    # Защита от повторного начисления 300 баллов (раньше проверялось по тексту уведомления)
+    points_awarded = models.BooleanField(default=False, db_default=False, editable=False)
 
-        is_new = self.pk is None  # проверяем, новое ли это задание
+    APPROVAL_POINTS = 300
+    OVERDUE_PENALTY = 100
 
-        today = timezone.localtime().date()
-        current_deadline = self.extended_deadline if self.extended_deadline else self.deadline
+    def approval_message(self):
+        return f"Ваше задание '{self.title}' одобрено! Вы получили {self.APPROVAL_POINTS} очков."
 
-        # Обновляем статус
+    def compute_status(self, today=None):
+        """Статус задания без побочных эффектов (та же логика, что раньше была в save)."""
+        today = today or timezone.localtime().date()
+        current_deadline = self.extended_deadline or self.deadline
         if self.is_approved:
-            self.status = "completed"
-            self.is_completed = True
-            self.in_process = False
-        elif self.rejection_reason and not self.is_approved:
-            self.status = "rejected"
-            self.in_process = True
-        elif not self.is_completed and current_deadline < today:
-            self.status = "overdue"
+            return "completed"
+        if self.rejection_reason:
+            return "rejected"
+        if not self.is_completed and current_deadline < today:
+            return "overdue"
+        if self.is_completed:
+            return "pending"
+        if self.extended_deadline and self.extended_deadline >= today:
+            return "deadline_extended"
+        return "process"
 
-            # 🔹 АВТОМАТИЧЕСКИЙ ШТРАФ ЗА ПРОСРОЧКУ
-            if self.user and not self.penalty_applied:
-                profile_obj = self.user.profile
-                profile_obj.points = max(0, profile_obj.points - 100)
-                profile_obj.save()
+    def needs_refresh(self, today=None):
+        status = self.compute_status(today)
+        return status != self.status or (status == "overdue" and self.user_id and not self.penalty_applied)
 
-                Notification.objects.create(
-                    user=self.user,
-                    message=f"У вас отняли 100 очков за несвоевременное выполнение задания '{self.title}'."
-                )
+    def _claim_flag(self, field):
+        """Атомарно переводит флаг False -> True в БД. True — только у одного из параллельных сохранений."""
+        if self.pk is None:
+            return True
+        return type(self).objects.filter(pk=self.pk, **{field: False}).update(**{field: True}) == 1
+
+    def save(self, *args, **kwargs):
+        from django.db import transaction
+        from django.db.models import F, Value
+        from django.db.models.functions import Greatest
+
+        is_new = self.pk is None
+        self.status = self.compute_status()
+
+        with transaction.atomic():
+            if self.status == "completed":
+                self.is_completed = True
+                self.in_process = False
+            elif self.status == "rejected":
+                self.in_process = True
+            elif self.status == "overdue" and self.user_id and not self.penalty_applied:
+                # Автоматический штраф за просрочку: строго один раз, даже при параллельных сохранениях
+                if self._claim_flag('penalty_applied'):
+                    profile.objects.filter(user_id=self.user_id).update(
+                        points=Greatest(F('points') - self.OVERDUE_PENALTY, Value(0))
+                    )
+                    Notification.objects.create(
+                        user_id=self.user_id,
+                        message=f"У вас отняли {self.OVERDUE_PENALTY} очков за несвоевременное выполнение задания '{self.title}'."
+                    )
                 self.penalty_applied = True
 
-        elif self.is_completed and not self.is_approved and not self.rejection_reason:
-            self.status = "pending"
-        elif not self.is_completed and self.extended_deadline and self.extended_deadline >= today:
-            self.status = "deadline_extended"
-        else:
-            self.status = "process"
+            # Начисление очков за выполнение — строго один раз
+            if self.status == "completed" and self.user_id and not self.points_awarded:
+                # Сначала запись (захват флага), затем чтение: на SQLite транзакция, начатая
+                # с чтения, при попытке записи может получить «database is locked».
+                if self._claim_flag('points_awarded') and not Notification.objects.filter(
+                        user_id=self.user_id, message=self.approval_message()).exists():
+                    profile.objects.filter(user_id=self.user_id).update(points=F('points') + self.APPROVAL_POINTS)
+                    Notification.objects.create(user_id=self.user_id, message=self.approval_message())
+                self.points_awarded = True
 
-        # --- НАЧИСЛЕНИЕ ОЧКОВ ЗА ВЫПОЛНЕНИЕ ---
-        if self.is_approved and self.status == "completed":
-            profile_obj = self.user.profile
-            if not Notification.objects.filter(
-                    user=self.user,
-                    message=f"Ваше задание '{self.title}' одобрено! Вы получили 300 очков."
-            ).exists():
-                profile_obj.points += 300
-                profile_obj.save()
+            if kwargs.get('update_fields') is not None:
+                kwargs['update_fields'] = set(kwargs['update_fields']) | {
+                    'status', 'is_completed', 'in_process', 'penalty_applied', 'points_awarded'}
 
+            super().save(*args, **kwargs)
+
+            if is_new and self.user_id:
                 Notification.objects.create(
-                    user=self.user,
-                    message=f"Ваше задание '{self.title}' одобрено! Вы получили 300 очков."
+                    user_id=self.user_id,
+                    message=f"📚 Вам назначено новое задание: '{self.title}'."
                 )
-
-        super().save(*args, **kwargs)
-
-        if is_new:
-            Notification.objects.create(
-                user=self.user,
-                message=f"📚 Вам назначено новое задание: '{self.title}'."
-            )
 
     def __str__(self):
         return self.title

@@ -1,229 +1,160 @@
+import logging
+import mimetypes
 import os
-from django.contrib.auth import logout, authenticate, login
-from django.contrib.auth.models import User
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
-from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
-from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import render, redirect, get_object_or_404
-from django.utils.text import slugify
-from django.urls import reverse
-from django.views.decorators.csrf import csrf_exempt
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
-from django.core.mail import send_mail
-from django.core.mail import EmailMessage
+import re
+
 from django.conf import settings
-from django.core.paginator import Paginator
-
-
-from django_app import models
-from .forms import ProfileUpdateForm
-from django.utils import timezone
-from .models import profile, Notification
-from django.shortcuts import redirect
 from django.contrib import messages
-from .models import Task
-from django.core.cache import cache
-from django.contrib.auth.decorators import login_required
-
-
-import requests
-from django.http import JsonResponse
-from django.conf import settings
-
-# TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/getChatMember"
-# CHANNEL_ID = "@visionskz"  # Ваш канал
-
-
+from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.shortcuts import render, redirect, get_object_or_404
-from .models import User, Task
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.mail import EmailMessage
+from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import F
+from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.http import content_disposition_header
+from django.utils.text import get_valid_filename
+from django.views.decorators.http import require_POST
+
+from .forms import ProfileUpdateForm
+from .models import Notification, Task, profile
+from .security import (
+    client_ip,
+    login_blocked,
+    register_login_failure,
+    reset_login_failures,
+    validate_task_upload,
+)
+
+logger = logging.getLogger(__name__)
+
+NOTIFICATIONS_ON_PAGE = 50
+PROFILE_BONUS_POINTS = 200
+PROFILE_BONUS_MESSAGE = "Вы заполнили все данные и получили 200 очков!"
+
 
 def is_admin(user):
-    return user.is_superuser  # Или можно сделать кастомную проверку
+    return user.is_superuser
+
+
+def is_staff(user):
+    return user.is_staff or user.is_superuser
+
+
+def award_points_once(user, message, points):
+    """Начисляет баллы один раз на (пользователь, сообщение). Безопасно при параллельных запросах:
+    первая операция в транзакции — UPDATE строки профиля, она берёт блокировку записи
+    (row lock в PostgreSQL, write lock в SQLite), поэтому проверки сериализуются."""
+    with transaction.atomic():
+        locked = profile.objects.filter(user=user).update(points=F('points'))
+        if not locked or Notification.objects.filter(user=user, message=message).exists():
+            return False
+        profile.objects.filter(user=user).update(points=F('points') + points)
+        Notification.objects.create(user=user, message=message)
+        return True
+
+
+def refresh_task_statuses(tasks):
+    """Пересохраняет только задания, у которых изменился статус (или нужен штраф)."""
+    today = timezone.localtime().date()
+    for task in tasks:
+        if task.needs_refresh(today):
+            task.save()
+
+
+# ---------- Admin ----------
 
 @login_required
 @user_passes_test(is_admin)
 def admin_panel(request):
-    today = timezone.now().date()
-    users = profile.objects.filter(is_former_user=False).order_by('-points')
-    tasks = Task.objects.filter(user=request.user).order_by('is_completed')
-
-    for task in tasks:
-        current_deadline = task.extended_deadline if task.extended_deadline else task.deadline
-
-        if task.is_approved:
-            task.status = "completed"
-            task.is_completed = True
-        elif task.rejection_reason and not task.is_approved:
-            task.status = "rejected"
-        elif not task.is_completed and current_deadline < today:
-            task.status = "overdue"
-        elif not task.is_completed and task.extended_deadline and task.extended_deadline >= today:
-            task.status = "deadline_extended"
-        elif task.in_process and not task.is_completed:
-            task.status = "process"
-        else:
-            task.status = "pending"
-
-        task.save(update_fields=['status', 'is_completed'])
-
+    users = profile.objects.filter(is_former_user=False).select_related('user').order_by('-points')
+    tasks = list(Task.objects.filter(user=request.user).order_by('is_completed'))
+    refresh_task_statuses(tasks)
     return render(request, 'django_app/admin.html', {'tasks': tasks, 'users': users})
-
 
 
 @login_required
 @user_passes_test(is_admin)
+@require_POST
 def approve_task(request, task_id):
     task = get_object_or_404(Task, id=task_id)
-    task.status = 'approved'  # Зависит от твоих названий
+    task.is_approved = True
     task.save()
     return redirect('django_app:admin_panel')
 
 
-@csrf_exempt
+# ---------- Notifications ----------
+
+@login_required
+@require_POST
 def mark_as_read(request, notification_id):
-    if request.method == 'POST':
-        try:
-            notification = Notification.objects.get(id=notification_id)
-            notification.is_read = True
-            notification.save()
-            return JsonResponse({'success': True})
-        except Notification.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Notification not found'}, status=404)
-    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+    updated = Notification.objects.filter(id=notification_id, user=request.user).update(is_read=True)
+    if not updated:
+        return JsonResponse({'success': False, 'error': 'Notification not found'}, status=404)
+    return JsonResponse({'success': True})
 
+
+# ---------- Social subscriptions ----------
+
+SOCIAL_NETWORKS = {
+    'telegram': ('Telegram', 'https://t.me/visionskz'),
+    'youtube': ('Youtube', 'https://www.youtube.com/@visionskz'),
+    'linkedn': ('Linkedn', 'https://linkedn'),
+    'instagram': ('Instagram', 'https://www.instagram.com/visions_kz/'),
+    'facebook': ('Facebook', 'https://www.facebook.com/profile.php?id=61558414774839'),
+}
+
+
+def _social_subscription(request, network):
+    """Переход на соцсеть; баллы начисляются строго один раз на сеть."""
+    label, target = SOCIAL_NETWORKS[network]
+    if not settings.SOCIAL_POINTS_AUTO_AWARD:
+        return redirect(target)
+
+    message = f"Вы подписались на {label} и получили 100 очков!"
+    already = not award_points_once(request.user, message, 100)
+
+    if already:
+        messages.info(request, f"Вы уже получили баллы за подписку на {label}.")
+    else:
+        messages.success(request, f"Вы успешно подписались на {label}! Баллы начислены.")
+    return redirect(target)
+
+
+@login_required
 def check_subscription_telegram(request):
-    """ Пользователь переходит на Telegram, и ему начисляются 100 очков """
-    profile_obj = get_object_or_404(profile, user=request.user)
-
-    # Проверяем, получал ли пользователь уже очки за подписку
-    if not Notification.objects.filter(user=request.user, message="Вы подписались на Telegram и получили 100 очков!").exists():
-        profile_obj.points += 100
-        profile_obj.save()
-
-        Notification.objects.create(
-            user=request.user,
-            message="Вы подписались на Telegram и получили 100 очков!"
-        )
-        messages.success(request, "Вы успешно подписались на Telegram! Баллы начислены.")
-    else:
-        messages.info(request, "Вы уже получили баллы за подписку на Telegram.")
-
-    return redirect('https://t.me/visionskz')  # Переход на Telegram
+    return _social_subscription(request, 'telegram')
 
 
+@login_required
 def check_subscription_youtube(request):
-    profile_obj = get_object_or_404(profile, user=request.user)
-
-    # Проверяем, получал ли пользователь уже очки за подписку
-    if not Notification.objects.filter(user=request.user, message="Вы подписались на Youtube и получили 100 очков!").exists():
-        profile_obj.points += 100
-        profile_obj.save()
-
-        Notification.objects.create(
-            user=request.user,
-            message="Вы подписались на Youtube и получили 100 очков!"
-        )
-        messages.success(request, "Вы успешно подписались на Youtube! Баллы начислены.")
-    else:
-        messages.info(request, "Вы уже получили баллы за подписку на Youtube.")
-
-    return redirect('https://www.youtube.com/@visionskz')  # Переход на Telegram
+    return _social_subscription(request, 'youtube')
 
 
+@login_required
 def check_subscription_linkedn(request):
-    profile_obj = get_object_or_404(profile, user=request.user)
-
-    # Проверяем, получал ли пользователь уже очки за подписку
-    if not Notification.objects.filter(user=request.user, message="Вы подписались на Linkedn и получили 100 очков!").exists():
-        profile_obj.points += 100
-        profile_obj.save()
-
-        Notification.objects.create(
-            user=request.user,
-            message="Вы подписались на Linkedn и получили 100 очков!"
-        )
-        messages.success(request, "Вы успешно подписались на Linkedn! Баллы начислены.")
-    else:
-        messages.info(request, "Вы уже получили баллы за подписку на Linkedn.")
-
-    return redirect('https://linkedn')  # Переход на Telegram
+    return _social_subscription(request, 'linkedn')
 
 
+@login_required
 def check_subscription_instagram(request):
-    profile_obj = get_object_or_404(profile, user=request.user)
-
-    if not Notification.objects.filter(user=request.user, message="Вы подписались на Instagram и получили 100 очков!").exists():
-        profile_obj.points += 100
-        profile_obj.save()
-
-        Notification.objects.create(
-            user=request.user,
-            message="Вы подписались на Instagram и получили 100 очков!"
-        )
-        messages.success(request, "Вы успешно подписались на Instagram! Баллы начислены.")
-    else:
-        messages.info(request, "Вы уже получили баллы за подписку на Instagram.")
-
-    return redirect('https://www.instagram.com/visions_kz/')  # Переход на Instagram
+    return _social_subscription(request, 'instagram')
 
 
+@login_required
 def check_subscription_facebook(request):
-    profile_obj = get_object_or_404(profile, user=request.user)
-
-    if not Notification.objects.filter(user=request.user, message="Вы подписались на Facebook и получили 100 очков!").exists():
-        profile_obj.points += 100
-        profile_obj.save()
-
-        Notification.objects.create(
-            user=request.user,
-            message="Вы подписались на Facebook и получили 100 очков!"
-        )
-        messages.success(request, "Вы успешно подписались на Facebook! Баллы начислены.")
-    else:
-        messages.info(request, "Вы уже получили баллы за подписку на Facebook.")
-
-    return redirect('https://www.facebook.com/profile.php?id=61558414774839')  # Переход на Instagram
+    return _social_subscription(request, 'facebook')
 
 
-def login_user(request):
-    if not request.user.is_staff:  # Только для обычных пользователей
-        user = authenticate(request, username='user', password='password')
-        if user is not None:
-            login(request, user)
+# ---------- Pages ----------
 
-
-def home_view(request: HttpRequest) -> HttpResponse:  # TODO контроллер функция
-    context = {}
-    return render(request, 'django_app/welcome.html', context=context)
-
-
-def home_main(request):
-    if not request.user.is_authenticated:
-        return redirect('django_app:home')
-
-    filter_former = request.GET.get('former')  # Получаем параметр из URL
-
-    if filter_former == 'yes':
-        users = profile.objects.filter(is_former_user=True).order_by('-points')
-    else:
-        users = profile.objects.filter(is_former_user=False).order_by('-points')
-
-    notifications = Notification.objects.filter(user=request.user).order_by('-created_at')
-    notifications.update(is_read=True)
-
-    paginator = Paginator(users, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    return render(request, 'django_app/home_main.html', {
-        'users': users,
-        'notifications': notifications,
-        'filter_former': filter_former,
-        'page_obj': page_obj,
-    })
+def home_view(request: HttpRequest) -> HttpResponse:
+    return render(request, 'django_app/welcome.html')
 
 
 def scrum_welcome(request):
@@ -234,32 +165,54 @@ def instructions(request):
     return render(request, 'django_app/instructions.html')
 
 
+def about(request):
+    return render(request, 'django_app/about.html')
+
+
+def home_main(request):
+    if not request.user.is_authenticated:
+        return redirect('django_app:home')
+
+    filter_former = request.GET.get('former')
+    users = (profile.objects
+             .filter(is_former_user=(filter_former == 'yes'))
+             .select_related('user')
+             .order_by('-points', 'user__username'))
+
+    # Уведомления больше не помечаются прочитанными при открытии страницы:
+    # непрочитанные видны, отметка ставится по клику.
+    notifications = Notification.objects.filter(user=request.user).order_by('-created_at')[:NOTIFICATIONS_ON_PAGE]
+
+    page_obj = Paginator(users, 5).get_page(request.GET.get('page'))
+
+    return render(request, 'django_app/home_main.html', {
+        'users': users,
+        'notifications': notifications,
+        'filter_former': filter_former,
+        'page_obj': page_obj,
+    })
+
+
 def homework(request):
     if not request.user.is_authenticated:
         return redirect('django_app:login')
 
-    if request.user.is_staff or request.user.is_superuser:
-        tasks = Task.objects.all()
-        for task in tasks:
-            task.save()
-
-        users = User.objects.filter(
-            profile__is_former_user=False
-        ).order_by('-profile__points')
-
+    if is_staff(request.user):
+        refresh_task_statuses(Task.objects.select_related('user'))
+        users = (User.objects
+                 .filter(profile__is_former_user=False)
+                 .select_related('profile')
+                 .order_by('-profile__points'))
         return render(request, 'django_app/homework_admin.html', {'users': users})
 
-    tasks = Task.objects.filter(user=request.user).order_by('is_completed')
-
-    for task in tasks:
-        task.save()
-
+    tasks = list(Task.objects.filter(user=request.user).order_by('is_completed'))
+    refresh_task_statuses(tasks)
     return render(request, 'django_app/homework.html', {'tasks': tasks})
 
 
 @login_required
 def user_homework_detail(request, user_id):
-    if not (request.user.is_staff or request.user.is_superuser):
+    if not is_staff(request.user):
         return redirect('django_app:homework')
 
     user = get_object_or_404(User, id=user_id)
@@ -267,179 +220,173 @@ def user_homework_detail(request, user_id):
     return render(request, 'django_app/user_homework_detail.html', {'user': user, 'tasks': tasks})
 
 
-import os
-from django.core.files.base import ContentFile
+# ---------- Files ----------
 
-def upload_task(request, task_id):
-    if request.method == 'POST':
+@login_required
+def task_file(request, task_id, kind):
+    """Отдаёт файл задания или ответа только владельцу задания и сотрудникам."""
+    task = get_object_or_404(Task, id=task_id)
+    if task.user_id != request.user.id and not is_staff(request.user):
+        raise Http404
+    field = {'assignment': task.file, 'response': task.user_response_file}.get(kind)
+    if not field:
+        raise Http404
+
+    filename = os.path.basename(field.name)
+    accel_prefix = settings.PROTECTED_MEDIA_ACCEL_PREFIX
+    if accel_prefix:
+        response = HttpResponse()
+        response['X-Accel-Redirect'] = accel_prefix.rstrip('/') + '/' + field.name
+        response['Content-Type'] = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+        response['Content-Disposition'] = content_disposition_header(True, filename)
+    else:
         try:
-            task = Task.objects.get(id=task_id, user=request.user)
+            handle = field.open('rb')
+        except FileNotFoundError:
+            raise Http404
+        response = FileResponse(handle, as_attachment=True, filename=filename)
+    response['Cache-Control'] = 'private, no-store'
+    return response
 
-            if 'attachment' not in request.FILES:
-                return redirect('django_app:homework')
 
-            uploaded_file = request.FILES['attachment']
+@login_required
+@require_POST
+def upload_task(request, task_id):
+    task = Task.objects.filter(id=task_id, user=request.user).first()
+    if task is None:
+        logger.warning("Upload to foreign or missing task %s by user %s", task_id, request.user.pk)
+        return redirect('django_app:homework')
 
-            # --- 🔹 Генерация нового имени файла ---
-            original_name = uploaded_file.name
-            extension = os.path.splitext(original_name)[1]  # .pdf, .docx, .png и т.д.
+    if task.is_completed or task.status in ('pending', 'completed'):
+        messages.info(request, f"Задание «{task.title}» уже отправлено на проверку.")
+        return redirect('django_app:homework')
 
-            safe_title = task.title.replace(' ', '_')  # заменяем пробелы на "_"
-            safe_username = request.user.username.replace(' ', '_')
+    uploaded_file = request.FILES.get('attachment')
+    if uploaded_file is None:
+        messages.error(request, "Выберите файл с ответом.")
+        return redirect('django_app:homework')
 
-            new_filename = f"{safe_title}_{safe_username}{extension}"
+    try:
+        extension = validate_task_upload(uploaded_file)
+    except ValidationError as exc:
+        messages.error(request, f"«{task.title}»: {exc.messages[0]}")
+        return redirect('django_app:homework')
 
-            # --- 🔹 Переименование файла ---
-            uploaded_file.name = new_filename
+    base = re.sub(r'\.{2,}', '.', get_valid_filename(f"{task.title}_{request.user.username}".replace(' ', '_')))
+    base = base.strip('.')[:120] or 'answer'
+    uploaded_file.name = f"{base}{extension}"
 
-            # --- 🔹 Сохраняем ---
-            task.user_response_file = uploaded_file
-            task.is_completed = True
-            task.is_approved = False
-            task.in_process = False
-            task.save()
+    task.user_response_file = uploaded_file
+    task.is_completed = True
+    task.is_approved = False
+    task.in_process = False
+    # Повторная сдача после доработки: комментарий ментора уже сохранён в уведомлении,
+    # поэтому сбрасываем его, чтобы задание снова попало в статус «Ждёт проверки».
+    task.rejection_reason = None
+    task.save()
 
-            # --- 🔹 Уведомление ---
-            Notification.objects.create(
-                user=request.user,
-                message=f"Вы загрузили задание '{task.title}', ожидайте проверки."
-            )
+    Notification.objects.create(
+        user=request.user,
+        message=f"Вы загрузили задание '{task.title}', ожидайте проверки."
+    )
+    messages.success(request, f"Ответ на «{task.title}» отправлен на проверку.")
 
-            email_subject = 'Новое загруженное задание'
-            email_body = (
+    recipients = [e for e in settings.TASK_NOTIFY_EMAILS if e]
+    if recipients:
+        email = EmailMessage(
+            subject='Новое загруженное задание',
+            body=(
                 f"Пользователь {request.user.username} загрузил задание:\n"
                 f"Название: {task.title}\n"
-                f"Файл: {uploaded_file.name}"
-            )
-
-            email = EmailMessage(
-                subject=email_subject,
-                body=email_body,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=['son090984@gmail.com'],  # ← твой email
-            )
-
-            # Прикрепляем файл
-            email.attach_file(task.user_response_file.path)
-
-            # Отправляем письмо
+                f"Файл: {os.path.basename(task.user_response_file.name)}\n"
+                f"Открыть: {request.build_absolute_uri(reverse('django_app:task_file', args=[task.id, 'response']))}"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=recipients,
+        )
+        try:
+            if task.user_response_file.size <= 20 * 1024 * 1024:  # лимит вложений почты
+                email.attach_file(task.user_response_file.path)
             email.send(fail_silently=False)
+        except Exception:
+            logger.exception("Failed to send task upload e-mail for task %s", task.id)
 
-            return redirect('django_app:homework')
-
-        except Task.DoesNotExist:
-            print(f"Задание с ID {task_id} не найдено для пользователя {request.user.username}")
-            return redirect('django_app:homework')
-        except Exception as e:
-            print(f"Ошибка при загрузке задания: {e}")
-            return redirect('django_app:homework')
+    return redirect('django_app:homework')
 
 
+# ---------- Profile ----------
 
-def about(request):
-    return render(request, 'django_app/about.html')
-
-
+@login_required
 def profile_create(request):
     return render(request, 'django_app/profile.html')
 
 
+def _profile_complete(p):
+    return bool(p.image and p.image.name != 'profile_images/default.jpg' and p.city and p.description)
+
+
+@login_required
 def profileupdate(request):
+    user_profile = request.user.profile
     if request.method == 'POST':
-        profile = request.user.profile
-
-        pform = ProfileUpdateForm(request.POST, request.FILES, instance=profile)
-
+        pform = ProfileUpdateForm(request.POST, request.FILES, instance=user_profile)
         if pform.is_valid():
             pform.save()
 
-            if all([profile.image, profile.city, profile.description]):
-                if profile.points == 100:
-                    profile.points += 200
-                    profile.save()
-
-                    Notification.objects.create(
-                        user=request.user,
-                        message="Вы заполнили все данные и получили 200 очков!",
-                    )
-
+            if _profile_complete(user_profile):
+                if award_points_once(request.user, PROFILE_BONUS_MESSAGE, PROFILE_BONUS_POINTS):
                     messages.success(request, "Вы получили 200 очков за заполнение профиля!")
 
+            messages.success(request, "Профиль сохранён.")
             return redirect('django_app:profile')
     else:
-        profile = request.user.profile
-        pform = ProfileUpdateForm(instance=profile)
+        pform = ProfileUpdateForm(instance=user_profile)
 
     return render(request, 'django_app/profileupdate.html', {'pform': pform})
 
 
-# def register(request):
-#     if request.method == "POST":
-#         username = request.POST.get("username", "")
-#         email = request.POST.get("email", "")
-#         password = request.POST.get("password", "")
-#
-#         if User.objects.filter(username=username).exists():
-#             error_message = "Пользователь с таким логином уже существует."
-#             return render(request, 'django_app/register.html', {'error_message': error_message})
-#
-#         if User.objects.filter(email=email).exists():
-#             error_message = "Пользователь с таким email уже существует."
-#             return render(request, 'django_app/register.html', {'error_message': error_message})
-#
-#         try:
-#             validate_password(password)
-#         except ValidationError as e:
-#             error_message = "Вы ввели очень легкий пароль"
-    #         return render(request, 'django_app/register.html', {'error_message': error_message})
-    #
-    #     if username and email and password:
-    #         user = User.objects.create_user(username=username, email=email, password=password)
-    #         login(request, user)
-    #
-    #         profile = request.user.profile
-    #         profile.points += 100
-    #         profile.save()
-    #
-    #         Notification.objects.create(
-    #             user=request.user,
-    #             message=f"Вы зарегистрировались и получили 100 очков! Заполните свой профиль и получите еще 200 очков",
-    #         )
-    #         return redirect(reverse('django_app:home_main', args=()))
-    #     else:
-    #         error_message = "Все поля обязательны для заполнения."
-    #         return render(request, 'django_app/register.html', {'error_message': error_message})
-    # else:
-    #     return render(request, 'django_app/register.html')
+# ---------- Auth ----------
+
+def _authenticate_identifier(request, identifier, password):
+    if "@" in identifier:
+        for candidate in User.objects.filter(email__iexact=identifier)[:5]:
+            user = authenticate(request, username=candidate.username, password=password)
+            if user:
+                return user
+        return None
+    return authenticate(request, username=identifier, password=password)
 
 
 def login_(request):
     if request.method == "POST":
         identifier = request.POST.get("username", "").strip()
-        password = request.POST.get("password", "").strip()
+        password = request.POST.get("password", "")
 
-        user = None
-        if "@" in identifier:
-            try:
-                user = User.objects.get(email=identifier)
-                username = user.username
-            except User.DoesNotExist:
-                username = None
-        else:
-            username = identifier
+        if login_blocked(request, identifier):
+            logger.warning("Login temporarily blocked (ip=%s)", client_ip(request))
+            return render(request, 'django_app/login.html', {
+                'error_message': "Слишком много неудачных попыток входа. Подождите 15 минут.",
+                'blocked': True,
+            }, status=429)
 
-        if username:
-            user = authenticate(request, username=username, password=password)
-            if user:
-                login(request, user)
-                request.session.set_expiry(settings.SESSION_TIMEOUT)  # Устанавливаем таймер на 30 минут
-                return redirect(reverse('django_app:home_main'))
+        user = _authenticate_identifier(request, identifier, password) if identifier and password else None
+        if user:
+            reset_login_failures(request, identifier)
+            login(request, user)
+            request.session.set_expiry(settings.SESSION_TIMEOUT)
+            return redirect(reverse('django_app:home_main'))
 
+        register_login_failure(request, identifier)
         return render(request, 'django_app/login.html', {'error_message': "Логин или пароль неверны!"})
 
     return render(request, 'django_app/login.html')
 
 
 def logout_f(request):
-    logout(request)
-    return redirect(reverse('django_app:login', args=()))
+    # Выход только POST-запросом (защита от CSRF-logout через <img src="/logout/">)
+    if request.method == 'POST':
+        logout(request)
+        return redirect(reverse('django_app:login'))
+    if request.user.is_authenticated:
+        return redirect('django_app:home_main')
+    return redirect('django_app:login')

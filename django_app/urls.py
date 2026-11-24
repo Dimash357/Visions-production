@@ -18,6 +18,7 @@ urlpatterns = [
     path('homework/<int:user_id>/', views.user_homework_detail, name='user_homework_detail'),
     path('home/', views.home_view, name='home'),
     path('upload_task/<int:task_id>/', views.upload_task, name='upload_task'),
+    path('files/task/<int:task_id>/<str:kind>/', views.task_file, name='task_file'),
     path('about/', views.about, name='about'),
     path('check-subscription/telegram/', views.check_subscription_telegram, name='check_subscription_telegram'),
     path('check-subscription/linkedn/', views.check_subscription_linkedn, name='check_subscription_linkedn'),
