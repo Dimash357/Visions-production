@@ -1,84 +1,68 @@
-{% load static %}
-{% block prestyles %}{% endblock prestyles %}
-{% include 'components/navbar.html' %}
+{% extends 'layouts/app.html' %}
+{% block title %}Мои задания{% endblock %}
 
-<head>
-    <title>Homework</title>
-</head>
-
-<div class="container mt-4">
-    <h2 class="text-center mb-4">Ваши задания</h2>
-    <div class="row">
-        {% for task in tasks %}
-        <div class="col-md-6 col-lg-4">
-            <div class="card shadow-sm mb-4">
-                <div class="card-body">
-                    <h5 class="card-title text-center text-primary">{{ task.title }}</h5>
-                    <p class="card-text text-muted text-center">
-                        {{ task.description|default:"Нет описания" }}
-                    </p>
-                    <div class="d-flex justify-content-between align-items-center mt-3">
-                        <a href="{{ task.file.url }}" class="btn btn-primary btn-sm" download>
-                            Скачать
-                        </a>
-                        {% if not task.is_completed and task.status != "pending" and task.status != "completed" %}
-                        <form action="{% url 'django_app:upload_task' task.id %}" method="post" enctype="multipart/form-data" style="margin-left: 35px">
-                            {% csrf_token %}
-                            <input type="file" name="attachment" required>
-                            <button type="submit" class="btn btn-outline-success btn-sm">Прикрепить</button>
-                        </form>
-                        {% endif %}
-                    </div>
-
-                    {% if task.extended_deadline %}
-                    <div class="text-info">Продленный дедлайн: {{ task.extended_deadline }}</div>
-                    {% else %}
-                    <div>📅 Дедлайн: {{ task.deadline }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Блок статусов -->
-                {% if task.status == "completed" %}
-                <div class="card-footer bg-success text-white text-center">
-                    ✅ Выполнено +300 points
-                </div>
-                {% elif task.status == "overdue" %}
-                <div class="card-footer bg-danger text-white text-center">
-                    ❌ Просрочено
-                </div>
-                {% elif task.status == "process" %}
-                <div class="card-footer bg-secondary text-white text-center">
-                    Не выполнено
-                </div>
-                {% elif task.status == "rejected" %}
-                <div class="card-footer bg-warning text-white text-center">
-                    📝 На доработке
-                    <br>
-                    📝 Причина: {{ task.rejection_reason }}
-                </div>
-                {% elif task.status == "deadline_extended" %}
-                <div class="card-footer bg-info text-white text-center">
-                    ⏳ Срок продлен до {{ task.extended_deadline }}
-                    <br>
-                    📝 Причина: {{ task.rejection_reason }}
-                </div>
-                {% else %}
-                <div class="card-footer bg-warning text-dark text-center">
-                    ⏳ Ожидает проверки
-                    {% if task.user_response_file %}
-                    <br>
-                    <a href="{{ task.user_response_file.url }}" target="_blank" class="btn btn-light btn-sm mt-1">
-                        📥 Ваш ответ
-                    </a>
-                    {% endif %}
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        {% empty %}
-        <p class="text-center">Задания отсутствуют.</p>
-        {% endfor %}
-    </div>
+{% block content %}
+<div class="page-head">
+    <h1>Мои задания</h1>
+    <p>Скачайте задание, выполните его и прикрепите файл до дедлайна. За каждое принятое задание — 300 баллов.</p>
 </div>
 
-{% include 'components/footer.html' %}
+{% if tasks %}
+<ul class="tasks">
+    {% for task in tasks %}
+    <li class="task st-{{ task.status }}">
+        <span class="status">
+            {% if task.status == "completed" %}Принято, +300 баллов
+            {% elif task.status == "overdue" %}Просрочено
+            {% elif task.status == "rejected" %}На доработке
+            {% elif task.status == "deadline_extended" %}Срок продлён
+            {% elif task.status == "process" %}Нужно сдать
+            {% else %}Ждёт проверки{% endif %}
+        </span>
+
+        <h2>{{ task.title }}</h2>
+        {% if task.description %}<p class="desc">{{ task.description }}</p>{% endif %}
+
+        <p class="deadline">
+            {% if task.extended_deadline %}
+            Новый дедлайн: <strong>{{ task.extended_deadline|date:"d.m.Y" }}</strong>
+            <span class="visually-hidden">, исходный — {{ task.deadline|date:"d.m.Y" }}</span>
+            {% else %}
+            Дедлайн: <strong>{{ task.deadline|date:"d.m.Y" }}</strong>
+            {% endif %}
+        </p>
+
+        {% if task.status == "rejected" or task.status == "deadline_extended" %}
+            {% if task.rejection_reason %}
+            <p class="reason"><strong>Комментарий ментора:</strong> {{ task.rejection_reason }}</p>
+            {% endif %}
+        {% endif %}
+
+        <div class="actions">
+            <div class="row">
+                {% if task.file %}
+                <a href="{% url 'django_app:task_file' task.id 'assignment' %}" class="btn btn-ghost btn-sm">Скачать задание</a>
+                {% endif %}
+                {% if task.user_response_file and task.status == "pending" %}
+                <a href="{% url 'django_app:task_file' task.id 'response' %}" class="btn btn-ghost btn-sm">Мой ответ</a>
+                {% endif %}
+            </div>
+
+            {% if not task.is_completed and task.status != "pending" and task.status != "completed" %}
+            <form class="upload" action="{% url 'django_app:upload_task' task.id %}" method="post" enctype="multipart/form-data" data-once>
+                {% csrf_token %}
+                <label class="visually-hidden" for="attachment-{{ task.id }}">Файл с ответом на «{{ task.title }}»</label>
+                <input id="attachment-{{ task.id }}" type="file" name="attachment" required data-enables="submit-{{ task.id }}">
+                <button id="submit-{{ task.id }}" type="submit" class="btn btn-primary btn-sm" data-busy-label="Отправляем…">Отправить на проверку</button>
+            </form>
+            {% endif %}
+        </div>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<div class="panel">
+    <p class="empty">Заданий пока нет. Когда ментор назначит новое, оно появится здесь и в уведомлениях.</p>
+</div>
+{% endif %}
+{% endblock %}

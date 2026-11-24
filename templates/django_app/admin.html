@@ -1,43 +1,44 @@
-{% load static %}
-{% block prestyles %}{% endblock prestyles %}
-{% include 'components/navbar.html' %}
-<h2>Панель администратора</h2>
+{% extends 'layouts/app.html' %}
+{% block title %}Панель администратора{% endblock %}
 
-<ul class="list-group">
-    {% for user in users %}
-    <li class="list-group-item d-flex justify-content-between align-items-center"
-        {% if forloop.counter == 1 %} style="background-color: gold;"
-        {% elif forloop.counter == 2 %} style="background-color: silver;"
-        {% elif forloop.counter == 3 %} style="background-color: #cd7f32;"
-        {% endif %}>
+{% block content %}
+<div class="page-head">
+    <h1>Панель администратора</h1>
+</div>
 
-        <!-- Имя пользователя с номером -->
-        <span>
-            {% if forloop.counter == 1 %}
-                🥇 {{ user.user.username }}
-            {% elif forloop.counter == 2 %}
-                🥈 {{ user.user.username }}
-            {% elif forloop.counter == 3 %}
-                🥉 {{ user.user.username }}
-            {% else %}
-                {{ forloop.counter }}. {{ user.user.username }}
-            {% endif %}
-        </span>
+<div class="grid-2">
+    <section class="panel" aria-labelledby="adm-board">
+        <h2 id="adm-board">Рейтинг текущего потока</h2>
+        <ol class="leaderboard">
+            {% for user in users %}
+            <li>
+                <span class="rank{% if forloop.counter <= 3 %} rank-{{ forloop.counter }}{% endif %}">{{ forloop.counter }}</span>
+                <span class="name">{{ user.user.username }}</span>
+                <span class="points">{{ user.points }}</span>
+            </li>
+            {% empty %}
+            <li class="empty">В текущем потоке нет участников.</li>
+            {% endfor %}
+        </ol>
+    </section>
 
-        <!-- Очки -->
-        <span class="badge bg-primary rounded-pill">{{ user.points }}</span>
-    </li>
-    {% empty %}
-    <li class="list-group-item text-muted">Нет пользователей по этому фильтру.</li>
-    {% endfor %}
-</ul>
-
-        {% for task in tasks %}
-            <div style="margin-left: 20px;">
-                <p>Задание: {{ task.title }}</p>
-                <p>Описание: {{ task.description }}</p>
-                <p>Статус: {{ task.status }}</p>
-
-        {% endfor %}
-    </div>
-
+    <section class="panel" aria-labelledby="adm-tasks">
+        <h2 id="adm-tasks">Мои задания</h2>
+        {% if tasks %}
+        <ul class="feed">
+            {% for task in tasks %}
+            <li>
+                <span>
+                    <strong>{{ task.title }}</strong>
+                    {% if task.description %}<span class="meta">{{ task.description }}</span>{% endif %}
+                    <span class="status st-{{ task.status }}">{{ task.get_status_display }}</span>
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty">Заданий нет.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

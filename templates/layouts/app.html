@@ -1,0 +1,78 @@
+{% load static %}<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Visions{% endblock %} — Visions</title>
+    <meta name="description" content="{% block description %}Личный кабинет студента онлайн-школы Visions: домашние задания, рейтинг и баллы.{% endblock %}">
+    <meta name="theme-color" content="#17213d">
+    <link rel="icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@600&display=swap">
+    <link rel="stylesheet" href="{% static 'css/visions.css' %}?v=1">
+    {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+<a class="skip-link" href="#main">Перейти к содержимому</a>
+{% block chrome %}
+{% with current=request.resolver_match.url_name %}
+<header class="topbar">
+    <div class="wrap">
+        <a class="brand" href="{% url 'django_app:home_main' %}">
+            <img src="{% static 'img/photo_2025-01-05_16-34-54.jpg' %}" alt="" width="36" height="36">
+            VISIONS
+        </a>
+        <button class="menu-toggle" type="button" data-menu-toggle aria-controls="site-nav" aria-expanded="false">
+            <span class="menu-toggle-bars" aria-hidden="true"></span> Меню
+        </button>
+        <nav class="nav" id="site-nav" aria-label="Основная навигация">
+            <ul class="nav-links">
+                <li><a href="{% url 'django_app:home_main' %}"{% if current == 'home_main' %} aria-current="page"{% endif %}>Рейтинг</a></li>
+                <li><a href="{% url 'django_app:homework' %}"{% if current == 'homework' or current == 'user_homework_detail' %} aria-current="page"{% endif %}>Задания</a></li>
+                <li><a href="{% url 'django_app:instructions' %}"{% if current == 'instructions' %} aria-current="page"{% endif %}>Инструкция</a></li>
+                <li><a href="{% url 'django_app:about' %}"{% if current == 'about' %} aria-current="page"{% endif %}>О школе</a></li>
+                <li><a href="https://visions.kz/" target="_blank" rel="noopener noreferrer">Visions.kz<span class="visually-hidden"> (откроется в новой вкладке)</span></a></li>
+            </ul>
+            <ul class="nav-user">
+            {% if request.user.is_authenticated %}
+                <li><a href="{% url 'django_app:profile' %}"{% if current == 'profile' or current == 'profile_update' %} aria-current="page"{% endif %}>
+                    <img class="avatar" src="{{ request.user.profile.image.url }}" alt="" width="28" height="28">{{ request.user.username }}</a></li>
+                <li><form method="post" action="{% url 'django_app:logout' %}" class="nav-form">{% csrf_token %}<button type="submit" class="nav-logout">Выйти</button></form></li>
+            {% else %}
+                <li><a href="{% url 'django_app:login' %}">Войти</a></li>
+            {% endif %}
+            </ul>
+        </nav>
+    </div>
+</header>
+{% endwith %}
+{% endblock chrome %}
+
+<main id="main" class="{% block main_class %}page{% endblock %}" tabindex="-1">
+    {% block main %}
+    <div class="wrap">
+        {% if messages %}
+        <ul class="messages" role="status">
+            {% for message in messages %}
+            <li class="alert{% if message.tags %} alert-{{ message.tags }}{% endif %}">{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </div>
+    {% endblock main %}
+</main>
+
+{% block footer %}
+<footer class="footer">
+    <div class="wrap">
+        <span>&copy; {% now "Y" %} Visions.kz</span>
+        <a href="https://visions.kz/" target="_blank" rel="noopener noreferrer">visions.kz</a>
+    </div>
+</footer>
+{% endblock footer %}
+<script src="{% static 'js/visions.js' %}?v=1" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
