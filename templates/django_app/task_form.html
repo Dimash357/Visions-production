@@ -1,0 +1,66 @@
+{% extends 'layouts/app.html' %}
+{% block title %}{% if mode == 'edit' %}Редактирование задания{% elif mode == 'duplicate' %}Дублирование задания{% else %}Новое задание{% endif %}{% endblock %}
+
+{% block content %}
+<p><a href="{% if mode == 'edit' %}{% url 'django_app:task_group' key %}{% else %}{% url 'django_app:task_groups' %}{% endif %}">{% if mode == 'edit' %}{{ first.title }}{% else %}Управление заданиями{% endif %}</a></p>
+<div class="page-head">
+    <h1>{% if mode == 'edit' %}Редактирование задания{% elif mode == 'duplicate' %}Дублирование задания{% else %}Новое задание{% endif %}</h1>
+    <p>{% if mode == 'edit' %}Изменения применятся у всех студентов, которым назначено задание. Статусы, ответы и баллы сохранятся.{% elif mode == 'duplicate' %}Копия «{{ source.title }}» с тем же файлом. Выберите студентов и новый дедлайн.{% else %}Задание появится у выбранных студентов сразу, с уведомлением и напоминанием за сутки до дедлайна.{% endif %}</p>
+</div>
+
+<div class="grid-2 form-layout">
+    <form method="post" enctype="multipart/form-data" class="panel form" data-once data-preview novalidate>
+        {% csrf_token %}
+        {{ form.batch }}{{ form.source }}
+        {% if form.non_field_errors %}<div class="alert alert-error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="field">
+            <label for="{{ form.title.id_for_label }}">Название</label>
+            {{ form.title }}{{ form.title.errors }}
+        </div>
+        <div class="field">
+            <label for="{{ form.description.id_for_label }}">Описание</label>
+            {{ form.description }}
+            <p class="help">Что сделать и в каком формате сдать. Необязательно.</p>
+            {{ form.description.errors }}
+        </div>
+        <div class="field">
+            <label for="{{ form.deadline.id_for_label }}">Дедлайн</label>
+            {{ form.deadline }}
+            <p class="help">Задание можно сдать до конца этого дня по времени Алматы.</p>
+            {{ form.deadline.errors }}
+        </div>
+        <div class="field">
+            <label for="{{ form.file.id_for_label }}">{{ form.file.label }}</label>
+            {{ form.file }}
+            <p class="help">{% if mode == 'edit' %}Оставьте пустым, чтобы сохранить текущий файл. {% elif mode == 'duplicate' %}Оставьте пустым, чтобы использовать файл исходного задания. {% endif %}PDF, Word, Excel, PowerPoint, изображение или ZIP, до 20 МБ.</p>
+            {{ form.file.errors }}
+        </div>
+        {% if form.students %}
+        <fieldset class="field students">
+            <legend class="label">Студенты текущего потока</legend>
+            <label class="check-all"><input type="checkbox" data-check-all="students"> Выбрать всех</label>
+            <div class="student-list">
+                {% for choice in form.students %}<label>{{ choice.tag }} {{ choice.choice_label }}</label>{% endfor %}
+            </div>
+            <p class="help">Студентам, у которых уже есть активное задание с таким названием, повторно оно не назначится.</p>
+            {{ form.students.errors }}
+        </fieldset>
+        {% endif %}
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" data-busy-label="Сохраняем…">{% if mode == 'edit' %}Сохранить изменения{% else %}Назначить задание{% endif %}</button>
+            <a class="btn btn-ghost" href="{% if mode == 'edit' %}{% url 'django_app:task_group' key %}{% else %}{% url 'django_app:task_groups' %}{% endif %}">Отмена</a>
+        </div>
+    </form>
+
+    <aside class="preview" aria-labelledby="pv-title">
+        <h2 id="pv-title" class="preview-label">Предпросмотр для студента</h2>
+        <div class="task st-process preview-card" aria-live="polite">
+            <span class="status">Нужно сдать</span>
+            <h2 data-pv="title">{{ form.title.value|default:"Название задания" }}</h2>
+            <p class="desc" data-pv="description">{{ form.description.value|default:"" }}</p>
+            <p class="deadline">Дедлайн: <strong data-pv="deadline">—</strong></p>
+            <div class="actions"><div class="row"><span class="btn btn-ghost btn-sm" aria-hidden="true">Скачать задание</span></div></div>
+        </div>
+    </aside>
+</div>
+{% endblock %}

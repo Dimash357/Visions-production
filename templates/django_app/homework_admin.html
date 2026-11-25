@@ -3,9 +3,15 @@
 {% block title %}Проверка заданий{% endblock %}
 
 {% block content %}
-<div class="page-head">
-    <h1>Проверка заданий</h1>
-    <p>Работы, которые ждут проверки, — сначала самые давние. Откройте студента, чтобы принять работу или вернуть её с комментарием.</p>
+<div class="page-head head-row">
+    <div>
+        <h1>Проверка заданий</h1>
+        <p>Работы, которые ждут проверки, — сначала самые давние. Откройте студента, чтобы принять работу или вернуть её с комментарием.</p>
+    </div>
+    <div class="form-actions">
+        <a class="btn btn-ghost" href="{% url 'django_app:task_groups' %}">Управление заданиями</a>
+        <a class="btn btn-primary" href="{% url 'django_app:task_create' %}">Новое задание</a>
+    </div>
 </div>
 
 {% if open_requests %}

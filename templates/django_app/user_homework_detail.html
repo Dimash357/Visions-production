@@ -4,12 +4,16 @@
 
 {% block content %}
 <p><a href="{% url 'django_app:homework' %}">Проверка заданий</a></p>
-<div class="page-head">
-    <h1>{{ user.username|replace_underscore }}</h1>
-    <p>Задания студента, от последнего дедлайна к первому.</p>
+<div class="page-head head-row">
+    <div>
+        <h1>{{ user.username|replace_underscore }}</h1>
+        <p>Задания студента, от последнего дедлайна к первому.</p>
+    </div>
+    <a class="btn btn-primary" href="{% url 'django_app:task_create' %}?student={{ user.id }}">Добавить задание</a>
 </div>
 
-{% for task in tasks %}{% if task.status == 'pending' %}
+
+{% for task in tasks %}{% if task.status == 'pending' and not task.is_archived %}
 <section class="panel review" id="task-{{ task.id }}" aria-labelledby="review-{{ task.id }}">
     <span class="status st-pending">Ждёт проверки{% if task.submitted_at %}, сдано {{ task.submitted_at|date:"d.m.Y, H:i" }}{% endif %}</span>
     <h2 id="review-{{ task.id }}">{{ task.title }}</h2>
@@ -44,8 +48,8 @@
         </thead>
         <tbody>
             {% for task in tasks %}
-            <tr>
-                <td>{{ task.title }}{% if task.status == 'rejected' and task.rejection_reason %}<br><span class="meta">Комментарий: {{ task.rejection_reason }}</span>{% endif %}</td>
+            <tr{% if task.is_archived %} class="is-archived"{% endif %}>
+                <td>{% if task.group_key %}<a href="{% url 'django_app:task_group' task.group_key %}">{{ task.title }}</a>{% else %}{{ task.title }}{% endif %}{% if task.is_archived %} <span class="meta">(архив)</span>{% endif %}{% if task.status == 'rejected' and task.rejection_reason %}<br><span class="meta">Комментарий: {{ task.rejection_reason }}</span>{% endif %}</td>
                 <td><span class="status st-{{ task.status }}">{{ task.get_status_display }}</span></td>
                 <td>
                     {% if task.user_response_file %}

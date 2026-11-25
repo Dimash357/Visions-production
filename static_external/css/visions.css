@@ -352,3 +352,40 @@ p { margin: 0 0 1em; }
   .topbar .wrap { flex-wrap: nowrap; gap: .75rem; }
   .nav a, .nav button.nav-logout { padding: .5rem .55rem; font-size: .95rem; white-space: nowrap; }
 }
+
+/* ---------- Assign task ---------- */
+.assign { margin-bottom: 1.5rem; }
+.assign summary { list-style: none; cursor: pointer; display: inline-block; }
+.assign summary::-webkit-details-marker { display: none; }
+.assign[open] summary .btn { background: var(--paper); color: var(--ink); border-color: var(--line); }
+.assign-form { margin-top: 1.25rem; }
+.field input[type="date"] { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: .6rem .8rem; }
+.field-check { display: grid; grid-template-columns: auto 1fr; gap: .25rem .6rem; align-items: center; }
+.field-check input { width: 18px; height: 18px; margin: 0; }
+.field-check label { margin: 0; font-weight: 500; }
+.field-check .help { grid-column: 2; margin: 0; }
+.field input[type="file"]::file-selector-button {
+  font: inherit; font-size: .875rem; margin-right: .6rem; padding: .4rem .75rem; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--board); color: var(--ink); cursor: pointer;
+}
+
+/* ---------- Task management ---------- */
+.head-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; justify-content: space-between; }
+.head-row > div:first-child { flex: 1 1 320px; }
+.form-layout { align-items: start; }
+@media (min-width: 900px) { .form-layout { grid-template-columns: 7fr 5fr; } .preview { position: sticky; top: 1rem; } }
+.preview-label { font-size: .9rem; color: var(--ink-soft); font-family: var(--font-body); font-weight: 500; }
+.preview-card { box-shadow: 0 1px 0 var(--line); }
+.students { border: 0; padding: 0; margin: 0; }
+.students legend { padding: 0; margin-bottom: .35rem; font-weight: 500; }
+.check-all { display: inline-flex; gap: .45rem; align-items: center; font-size: .9rem; margin-bottom: .5rem; }
+.student-list { display: grid; gap: .35rem .75rem; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; }
+.student-list label { display: flex; gap: .45rem; align-items: center; font-size: .925rem; overflow-wrap: anywhere; }
+.students input[type="checkbox"], .table input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--signal); }
+.shift { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; margin-top: 1rem; }
+.shift .field { margin: 0; }
+.danger-zone { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.btn-danger { background: var(--paper); color: var(--bad); border-color: #e7b4af; }
+.btn-danger:hover { background: var(--bad-bg); color: var(--bad); }
+.is-archived td { color: var(--ink-soft); }

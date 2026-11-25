@@ -1,0 +1,47 @@
+{% extends 'layouts/app.html' %}
+{% block title %}Управление заданиями{% endblock %}
+
+{% block content %}
+<div class="page-head head-row">
+    <div>
+        <h1>Управление заданиями</h1>
+        <p>Каждая строка — одно задание и все студенты, которым оно назначено.</p>
+    </div>
+    <a class="btn btn-primary" href="{% url 'django_app:task_create' %}">Новое задание</a>
+</div>
+
+<nav class="segmented" aria-label="Фильтр заданий">
+    <a href="{% url 'django_app:task_groups' %}"{% if not show_archived %} aria-current="true"{% endif %}>Активные</a>
+    <a href="{% url 'django_app:task_groups' %}?archived=1"{% if show_archived %} aria-current="true"{% endif %}>Архив</a>
+</nav>
+
+<div class="panel table-wrap">
+    {% if groups %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th scope="col">Задание</th>
+                <th scope="col">Дедлайн</th>
+                <th scope="col">Сдали</th>
+                <th scope="col" class="num">Ждут проверки</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for g in groups %}
+            <tr>
+                <td>{% if g.key %}<a href="{% url 'django_app:task_group' g.key %}">{{ g.title }}</a>{% else %}{{ g.title }}{% endif %}</td>
+                <td>{{ g.deadline|date:"d.m.Y" }}</td>
+                <td>
+                    <span class="meter" aria-hidden="true"><span style="width:{% widthratio g.submitted g.students 100 %}%"></span></span>
+                    <span class="meter-label">{{ g.submitted }} из {{ g.students }}</span>
+                </td>
+                <td class="num">{% if g.pending %}<strong>{{ g.pending }}</strong>{% else %}0{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">{% if show_archived %}В архиве пусто.{% else %}Заданий пока нет. Создайте первое — оно появится у выбранных студентов сразу.{% endif %}</p>
+    {% endif %}
+</div>
+{% endblock %}

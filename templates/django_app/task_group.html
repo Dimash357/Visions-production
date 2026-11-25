@@ -1,0 +1,94 @@
+{% extends 'layouts/app.html' %}
+{% load custom_filters %}
+{% block title %}{{ first.title }}{% endblock %}
+
+{% block content %}
+<p><a href="{% url 'django_app:task_groups' %}">Управление заданиями</a></p>
+<div class="page-head head-row">
+    <div>
+        <h1>{{ first.title }}</h1>
+        <p>{% if archived %}В архиве — студенты его не видят.{% else %}Назначено {{ tasks|length }} студентам.{% endif %}</p>
+    </div>
+    <div class="form-actions">
+        <a class="btn btn-ghost" href="{% url 'django_app:task_edit' key %}">Редактировать</a>
+        <a class="btn btn-ghost" href="{% url 'django_app:task_create' %}?from={{ key }}">Дублировать</a>
+    </div>
+</div>
+
+<div class="grid-2">
+    <section class="panel" aria-labelledby="preview-title">
+        <h2 id="preview-title">Так видит студент</h2>
+        <div class="task st-process preview-card">
+            <span class="status">Нужно сдать</span>
+            <h2>{{ first.title }}</h2>
+            {% if first.description %}<p class="desc">{{ first.description }}</p>{% endif %}
+            <p class="deadline">Дедлайн: <strong>{{ first.deadline|date:"d.m.Y" }}</strong></p>
+            <div class="actions"><div class="row">
+                <a class="btn btn-ghost btn-sm" href="{% url 'django_app:task_file' first.id 'assignment' %}">Скачать задание</a>
+            </div></div>
+        </div>
+    </section>
+
+    <section class="panel" aria-labelledby="manage-title">
+        <h2 id="manage-title">Архив и удаление</h2>
+        {% if archived %}
+        <p class="meta">Задание скрыто у студентов, данные и баллы сохранены.</p>
+        <form method="post" action="{% url 'django_app:task_archive' key %}" data-once>{% csrf_token %}
+            <button class="btn btn-ghost" name="action" value="restore">Вернуть из архива</button>
+        </form>
+        {% else %}
+        <p class="meta">Архив скрывает задание у студентов и отключает штрафы и напоминания. Сданные работы и баллы сохраняются.</p>
+        <form method="post" action="{% url 'django_app:task_archive' key %}" data-once>{% csrf_token %}
+            <button class="btn btn-ghost" name="action" value="archive">Перенести в архив</button>
+        </form>
+        {% endif %}
+        {% if can_delete %}
+        <form method="post" action="{% url 'django_app:task_delete' key %}" class="danger-zone" data-once
+              onsubmit="return confirm('Удалить задание «{{ first.title|escapejs }}» у всех студентов? Это нельзя отменить.');">
+            {% csrf_token %}
+            <button class="btn btn-danger">Удалить навсегда</button>
+            <p class="help">Доступно, пока никто не сдал работу и не получил баллы.</p>
+        </form>
+        {% endif %}
+    </section>
+</div>
+
+<section class="panel table-wrap" aria-labelledby="students-title">
+    <h2 id="students-title">Студенты</h2>
+    <form method="post" action="{% url 'django_app:task_deadline' key %}" data-once id="shift-form">
+        {% csrf_token %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col"><input type="checkbox" data-check-all="tasks" aria-label="Выбрать всех" checked></th>
+                    <th scope="col">Студент</th>
+                    <th scope="col">Статус</th>
+                    <th scope="col">Дедлайн</th>
+                    <th scope="col">Ответ</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tasks %}
+                <tr>
+                    <td>{% if not t.is_approved %}<input type="checkbox" name="tasks" value="{{ t.id }}" checked aria-label="{{ t.user.username|replace_underscore }}">{% endif %}</td>
+                    <td><a href="{% url 'django_app:user_homework_detail' t.user_id %}">{{ t.user.username|replace_underscore }}</a></td>
+                    <td><span class="status st-{{ t.status }}">{{ t.get_status_display }}</span></td>
+                    <td>{{ t.deadline|date:"d.m.Y" }}{% if t.extended_deadline %}<br><span class="meta">продлён до {{ t.extended_deadline|date:"d.m.Y" }}</span>{% endif %}</td>
+                    <td>{% if t.user_response_file %}<a href="{% url 'django_app:task_file' t.id 'response' %}">Скачать</a>{% else %}<span class="meta">—</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if not archived %}
+        <div class="shift">
+            <div class="field">
+                <label for="{{ shift_form.new_deadline.id_for_label }}">Перенести дедлайн выбранным</label>
+                {{ shift_form.new_deadline }}
+            </div>
+            <button type="submit" class="btn btn-primary" data-busy-label="Переносим…">Перенести</button>
+        </div>
+        <p class="help">Если новая дата позже исходной, студент увидит «Срок продлён». Принятые работы не меняются.</p>
+        {% endif %}
+    </form>
+</section>
+{% endblock %}

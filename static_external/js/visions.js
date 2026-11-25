@@ -14,6 +14,7 @@
   // Prevent double submission of uploads (server sends an e-mail, which can be slow)
   document.querySelectorAll('form[data-once]').forEach(function (form) {
     form.addEventListener('submit', function (event) {
+      if (event.defaultPrevented) return;  // отменено, например, в confirm()
       if (form.dataset.busy) { event.preventDefault(); return; }
       form.dataset.busy = '1';
       var btn = event.submitter || form.querySelector('[type="submit"]');
@@ -33,4 +34,38 @@
     input.addEventListener('change', sync);
     sync();
   });
+
+  // «Выбрать всех» для списков чекбоксов
+  document.querySelectorAll('[data-check-all]').forEach(function (master) {
+    var name = master.dataset.checkAll;
+    var form = master.closest('form');
+    var boxes = function () { return form.querySelectorAll('input[type="checkbox"][name="' + name + '"]'); };
+    var sync = function () {
+      var all = boxes(), on = 0;
+      all.forEach(function (b) { if (b.checked) on++; });
+      master.checked = all.length > 0 && on === all.length;
+      master.indeterminate = on > 0 && on < all.length;
+    };
+    master.addEventListener('change', function () { boxes().forEach(function (b) { b.checked = master.checked; }); });
+    boxes().forEach(function (b) { b.addEventListener('change', sync); });
+    sync();
+  });
+
+  // Живой предпросмотр карточки задания
+  var pvForm = document.querySelector('form[data-preview]');
+  if (pvForm) {
+    var field = function (n) { return pvForm.querySelector('[name="' + n + '"]'); };
+    var out = function (n) { return document.querySelector('[data-pv="' + n + '"]'); };
+    var render = function () {
+      var title = field('title'), desc = field('description'), dl = field('deadline');
+      if (title && out('title')) out('title').textContent = title.value.trim() || 'Название задания';
+      if (desc && out('description')) { out('description').textContent = desc.value; out('description').hidden = !desc.value.trim(); }
+      if (dl && out('deadline')) {
+        var p = (dl.value || '').split('-');
+        out('deadline').textContent = p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : '—';
+      }
+    };
+    pvForm.addEventListener('input', render);
+    render();
+  }
 })();
