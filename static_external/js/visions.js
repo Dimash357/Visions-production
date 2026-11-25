@@ -13,12 +13,15 @@
 
   // Prevent double submission of uploads (server sends an e-mail, which can be slow)
   document.querySelectorAll('form[data-once]').forEach(function (form) {
-    form.addEventListener('submit', function () {
-      var btn = form.querySelector('[type="submit"]');
-      if (btn) {
-        btn.setAttribute('disabled', 'disabled');
-        if (btn.dataset.busyLabel) btn.textContent = btn.dataset.busyLabel;
-      }
+    form.addEventListener('submit', function (event) {
+      if (form.dataset.busy) { event.preventDefault(); return; }
+      form.dataset.busy = '1';
+      var btn = event.submitter || form.querySelector('[type="submit"]');
+      // Отключаем кнопки после того, как браузер собрал данные формы (иначе name/value кнопки потеряются)
+      setTimeout(function () {
+        form.querySelectorAll('[type="submit"]').forEach(function (b) { b.disabled = true; });
+        if (btn && btn.dataset.busyLabel) btn.textContent = btn.dataset.busyLabel;
+      }, 0);
     });
   });
 

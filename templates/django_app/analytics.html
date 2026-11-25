@@ -1,0 +1,69 @@
+{% extends 'layouts/app.html' %}
+{% block title %}Аналитика{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>Аналитика потоков</h1>
+    <p>Сдача и просрочки считаются по заданиям, у которых уже прошёл дедлайн или есть ответ. Время проверки — с момента сдачи до решения ментора (данные копятся с этого релиза).</p>
+</div>
+
+{% with g=current %}
+<section aria-labelledby="cur-title">
+    <h2 id="cur-title" class="visually-hidden">Текущий поток</h2>
+    <dl class="tiles">
+        <div class="tile"><dt>Сдано заданий</dt><dd>{% if g.submission_rate is not None %}{{ g.submission_rate }}%{% else %}—{% endif %}</dd><span class="tile-note">из тех, у которых прошёл дедлайн</span></div>
+        <div class="tile"><dt>Просрочки</dt><dd>{% if g.overdue_rate is not None %}{{ g.overdue_rate }}%{% else %}—{% endif %}</dd><span class="tile-note">заданий со штрафом</span></div>
+        <div class="tile"><dt>Ждут проверки</dt><dd>{{ g.waiting_review }}</dd><span class="tile-note">{% if g.median_review_hours is not None %}медиана проверки {{ g.median_review_hours }} ч{% else %}время проверки пока не накоплено{% endif %}</span></div>
+        <div class="tile"><dt>Активны за 7 дней</dt><dd>{% if g.active_week is not None %}{{ g.active_week }}%{% else %}—{% endif %}</dd><span class="tile-note">{{ g.students }} студентов в потоке</span></div>
+    </dl>
+</section>
+{% endwith %}
+
+<section class="panel table-wrap" aria-labelledby="cmp-title">
+    <h2 id="cmp-title">Сравнение потоков</h2>
+    <table class="table">
+        <thead>
+            <tr><th scope="col">Показатель</th>{% for g in groups %}<th scope="col" class="num">{{ g.label }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody>
+            <tr><td>Студентов</td>{% for g in groups %}<td class="num">{{ g.students }}</td>{% endfor %}</tr>
+            <tr><td>Заданий назначено</td>{% for g in groups %}<td class="num">{{ g.tasks }}</td>{% endfor %}</tr>
+            <tr><td>Сдано</td>{% for g in groups %}<td class="num">{% if g.submission_rate is not None %}{{ g.submission_rate }}%{% else %}—{% endif %}</td>{% endfor %}</tr>
+            <tr><td>Просрочено</td>{% for g in groups %}<td class="num">{% if g.overdue_rate is not None %}{{ g.overdue_rate }}%{% else %}—{% endif %}</td>{% endfor %}</tr>
+            <tr><td>Принято с первой или повторной сдачи</td>{% for g in groups %}<td class="num">{% if g.approval_rate is not None %}{{ g.approval_rate }}%{% else %}—{% endif %}</td>{% endfor %}</tr>
+            <tr><td>На доработке сейчас</td>{% for g in groups %}<td class="num">{{ g.on_rework }}</td>{% endfor %}</tr>
+            <tr><td>Активны за 7 дней</td>{% for g in groups %}<td class="num">{% if g.active_week is not None %}{{ g.active_week }}%{% else %}—{% endif %}</td>{% endfor %}</tr>
+            <tr><td>Подключили Telegram</td>{% for g in groups %}<td class="num">{% if g.telegram is not None %}{{ g.telegram }}%{% else %}—{% endif %}</td>{% endfor %}</tr>
+            <tr><td>Заполнили профиль</td>{% for g in groups %}<td class="num">{% if g.profile_complete is not None %}{{ g.profile_complete }}%{% else %}—{% endif %}</td>{% endfor %}</tr>
+            <tr><td>Средний балл</td>{% for g in groups %}<td class="num">{{ g.avg_points|default_if_none:"—" }}</td>{% endfor %}</tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="panel table-wrap" aria-labelledby="tasks-title">
+    <h2 id="tasks-title">Задания текущего потока</h2>
+    {% if per_task %}
+    <table class="table">
+        <thead>
+            <tr><th scope="col">Задание</th><th scope="col">Сдали</th><th scope="col" class="num">Принято</th><th scope="col" class="num">Просрочено</th><th scope="col">Дедлайн</th></tr>
+        </thead>
+        <tbody>
+            {% for r in per_task %}
+            <tr>
+                <td>{{ r.title }}</td>
+                <td>
+                    <span class="meter" role="img" aria-label="Сдали {{ r.submitted }} из {{ r.assigned }}" title="Сдали {{ r.submitted }} из {{ r.assigned }} ({{ r.submitted_pct }}%)"><span style="width:{{ r.submitted_pct }}%"></span></span>
+                    <span class="meter-label">{{ r.submitted }} из {{ r.assigned }}</span>
+                </td>
+                <td class="num">{{ r.approved }}</td>
+                <td class="num">{{ r.overdue }}</td>
+                <td>{{ r.deadline|date:"d.m.Y" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Заданий в текущем потоке пока нет.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends 'layouts/app.html' %}
+{% load custom_filters %}
+{% block title %}Заявки{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>Заявки</h1>
+    <p>Подтвердите подписки на соцсети — баллы начислятся только после этого. Отметьте выданные награды; при отмене баллы вернутся студенту.</p>
+</div>
+
+<section class="panel table-wrap" aria-labelledby="claims-title">
+    <h2 id="claims-title">Подписки на соцсети</h2>
+    {% if claims %}
+    <table class="table">
+        <thead><tr><th scope="col">Студент</th><th scope="col">Соцсеть</th><th scope="col">Дата</th><th scope="col"><span class="visually-hidden">Действие</span></th></tr></thead>
+        <tbody>
+            {% for c in claims %}
+            <tr>
+                <td>{{ c.user.username|replace_underscore }}</td>
+                <td>{{ networks|get_item:c.network|default:c.network }}</td>
+                <td>{{ c.created_at|date:"d.m.Y" }}</td>
+                <td class="num">
+                    <form method="post" class="inline-actions" data-once>
+                        {% csrf_token %}
+                        <input type="hidden" name="kind" value="claim"><input type="hidden" name="id" value="{{ c.id }}">
+                        <button class="btn btn-primary btn-sm" name="action" value="approve">Подтвердить, +100</button>
+                        <button class="btn btn-ghost btn-sm" name="action" value="reject">Не подписан</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Новых заявок нет.</p>
+    {% endif %}
+</section>
+
+<section class="panel table-wrap" aria-labelledby="red-title">
+    <h2 id="red-title">Награды к выдаче</h2>
+    {% if redemptions %}
+    <table class="table">
+        <thead><tr><th scope="col">Студент</th><th scope="col">Награда</th><th scope="col" class="num">Баллы</th><th scope="col">Дата</th><th scope="col"><span class="visually-hidden">Действие</span></th></tr></thead>
+        <tbody>
+            {% for r in redemptions %}
+            <tr>
+                <td>{{ r.user.username|replace_underscore }}<br><span class="meta">{{ r.user.email }}</span></td>
+                <td>{{ r.reward.title }}</td>
+                <td class="num">{{ r.cost }}</td>
+                <td>{{ r.created_at|date:"d.m.Y" }}</td>
+                <td class="num">
+                    <form method="post" class="inline-actions" data-once>
+                        {% csrf_token %}
+                        <input type="hidden" name="kind" value="redemption"><input type="hidden" name="id" value="{{ r.id }}">
+                        <button class="btn btn-primary btn-sm" name="action" value="fulfill">Выдано</button>
+                        <button class="btn btn-ghost btn-sm" name="action" value="cancel">Отменить</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Заявок на награды нет.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends 'layouts/app.html' %}
+{% block title %}Награды{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>Награды</h1>
+    <p>Обменяйте баллы на встречу с ментором или книгу. Обмен не снижает ваше место в рейтинге: тратится только доступный баланс.</p>
+</div>
+
+<section class="panel balance" aria-labelledby="bal-title">
+    <h2 id="bal-title">Доступно для обмена</h2>
+    <span class="points points-lg">{{ balance }}</span>
+</section>
+
+<ul class="rewards">
+    {% for reward in rewards %}
+    <li class="panel reward">
+        <h2>{{ reward.title }}</h2>
+        {% if reward.description %}<p class="meta">{{ reward.description }}</p>{% endif %}
+        <p class="reward-cost"><span class="points">{{ reward.cost }}</span> баллов</p>
+        {% if not reward.missing %}
+        <form method="post" action="{% url 'django_app:redeem_reward' reward.id %}" data-once>
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary" data-busy-label="Отправляем…">Обменять</button>
+        </form>
+        {% else %}
+        <p class="meta">Не хватает {{ reward.missing }} баллов</p>
+        {% endif %}
+    </li>
+    {% empty %}
+    <li class="panel"><p class="empty">Наград пока нет.</p></li>
+    {% endfor %}
+</ul>
+
+<section class="panel table-wrap" aria-labelledby="my-title">
+    <h2 id="my-title">Мои заявки</h2>
+    {% if my_redemptions %}
+    <table class="table">
+        <thead><tr><th scope="col">Награда</th><th scope="col" class="num">Баллы</th><th scope="col">Статус</th><th scope="col">Дата</th></tr></thead>
+        <tbody>
+            {% for r in my_redemptions %}
+            <tr>
+                <td>{{ r.reward.title }}</td>
+                <td class="num">{{ r.cost }}</td>
+                <td><span class="status {% if r.status == 'fulfilled' %}st-completed{% elif r.status == 'cancelled' %}st-process{% else %}st-pending{% endif %}">{{ r.get_status_display }}</span></td>
+                <td>{{ r.created_at|date:"d.m.Y" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Вы ещё ничего не обменивали.</p>
+    {% endif %}
+</section>
+{% endblock %}

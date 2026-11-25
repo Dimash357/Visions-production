@@ -22,8 +22,8 @@
             <dd>{{ user.profile.city|default:"Не указан" }}</dd>
         </div>
         <div>
-            <dt>Баллы</dt>
-            <dd>{{ user.profile.points }}</dd>
+            <dt>Доступно для обмена</dt>
+            <dd><a href="{% url 'django_app:rewards' %}">{{ user.profile.available_points }} баллов</a></dd>
         </div>
     </dl>
 </section>
@@ -36,5 +36,21 @@
     <p class="empty">Расскажите о себе, добавьте город и фото — за заполненный профиль начисляется 200 баллов.</p>
     {% endif %}
     <a href="{% url 'django_app:profile_update' %}" class="btn btn-primary">Редактировать профиль</a>
+</section>
+
+<section class="panel" aria-labelledby="tg-title">
+    <h2 id="tg-title">Напоминания о дедлайнах</h2>
+    {% if user.profile.telegram_chat_id %}
+    <p>Telegram подключён: за сутки до дедлайна бот пришлёт напоминание.</p>
+    <form method="post" action="{% url 'django_app:telegram_disconnect' %}">{% csrf_token %}
+        <button type="submit" class="btn btn-ghost">Отключить Telegram</button>
+    </form>
+    {% else %}
+    <p class="meta">Сейчас напоминания приходят на почту{% if user.email %} {{ user.email }}{% endif %}. Подключите Telegram, чтобы получать их в мессенджер.</p>
+    <form method="post" action="{% url 'django_app:telegram_connect' %}" style="margin-top:1rem">{% csrf_token %}
+        <button type="submit" class="btn btn-primary">Подключить Telegram</button>
+    </form>
+    <p class="help" style="font-size:.85rem;color:var(--ink-soft);margin-top:.5rem">Откроется бот — нажмите в нём «Start». Привязка занимает до минуты.</p>
+    {% endif %}
 </section>
 {% endblock %}

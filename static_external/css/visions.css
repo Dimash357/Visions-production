@@ -321,3 +321,34 @@ p { margin: 0 0 1em; }
   color: #ffc9c4; padding: .55rem .75rem; border-radius: 8px; text-align: left;
 }
 .nav button.nav-logout:hover { color: #fff; background: rgba(255,255,255,.08); }
+
+/* ---------- Rewards ---------- */
+.balance { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.balance h2 { margin: 0; }
+.rewards { list-style: none; margin: 1.5rem 0; padding: 0; display: grid; gap: 1rem; }
+@media (min-width: 700px) { .rewards { grid-template-columns: repeat(2, 1fr); } }
+.rewards .panel + .panel { margin-top: 0; }
+.reward { display: flex; flex-direction: column; gap: .5rem; }
+.reward h2 { font-size: 1.05rem; margin: 0; }
+.reward .meta { margin: 0; }
+.reward-cost { margin: .25rem 0 .5rem; }
+.reward form, .reward > .meta:last-child { margin-top: auto; }
+
+.inline-actions { display: inline-flex; flex-wrap: wrap; gap: .4rem; justify-content: flex-end; margin: 0; }
+.review { border-top: 4px solid var(--signal); }
+.review h2 { margin-bottom: .75rem; }
+.panel + .table-wrap, .review + .panel { margin-top: 1.5rem; }
+
+/* ---------- Analytics ---------- */
+.tiles { display: grid; gap: 1rem; margin: 0 0 1.5rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.tile { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.1rem; }
+.tile dt { font-size: .875rem; color: var(--ink-soft); }
+.tile dd { margin: .2rem 0 .1rem; font-family: var(--font-display); font-weight: 600; font-size: 1.9rem; font-variant-numeric: tabular-nums; }
+.tile-note { font-size: .8rem; color: var(--ink-soft); }
+.meter { display: inline-block; vertical-align: middle; width: 120px; height: 8px; border-radius: 4px; background: var(--muted-bg); overflow: hidden; }
+.meter > span { display: block; height: 100%; background: var(--signal); border-radius: 4px; }
+.meter-label { font-size: .85rem; color: var(--ink-soft); margin-left: .5rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (min-width: 900px) {
+  .topbar .wrap { flex-wrap: nowrap; gap: .75rem; }
+  .nav a, .nav button.nav-logout { padding: .5rem .55rem; font-size: .95rem; white-space: nowrap; }
+}

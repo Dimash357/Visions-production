@@ -1,14 +1,47 @@
 {% extends 'layouts/app.html' %}
 {% load custom_filters %}
-{% block title %}Задания студентов{% endblock %}
+{% block title %}Проверка заданий{% endblock %}
 
 {% block content %}
 <div class="page-head">
-    <h1>Задания студентов</h1>
-    <p>Студенты текущего потока по количеству баллов. Откройте студента, чтобы посмотреть сданные файлы и статусы.</p>
+    <h1>Проверка заданий</h1>
+    <p>Работы, которые ждут проверки, — сначала самые давние. Откройте студента, чтобы принять работу или вернуть её с комментарием.</p>
 </div>
 
-<div class="panel table-wrap">
+{% if open_requests %}
+<p class="alert"><a href="{% url 'django_app:staff_requests' %}">Заявки на баллы и награды: {{ open_requests }}</a></p>
+{% endif %}
+
+<section class="panel table-wrap" aria-labelledby="queue-title">
+    <h2 id="queue-title">Ждут проверки{% if pending %} ({{ pending|length }}){% endif %}</h2>
+    {% if pending %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th scope="col">Задание</th>
+                <th scope="col">Студент</th>
+                <th scope="col">Сдано</th>
+                <th scope="col"><span class="visually-hidden">Действие</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in pending %}
+            <tr>
+                <td>{{ task.title }}</td>
+                <td>{{ task.user.username|replace_underscore }}</td>
+                <td>{% if task.submitted_at %}{{ task.submitted_at|date:"d.m.Y, H:i" }}{% else %}<span class="meta">—</span>{% endif %}</td>
+                <td class="num"><a class="btn btn-primary btn-sm" href="{% url 'django_app:user_homework_detail' task.user_id %}#task-{{ task.id }}">Проверить</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Все работы проверены.</p>
+    {% endif %}
+</section>
+
+<section class="panel table-wrap" aria-labelledby="students-title">
+    <h2 id="students-title">Студенты текущего потока</h2>
     <table class="table">
         <thead>
             <tr>
@@ -31,5 +64,5 @@
             {% endfor %}
         </tbody>
     </table>
-</div>
+</section>
 {% endblock %}

@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@600&display=swap">
-    <link rel="stylesheet" href="{% static 'css/visions.css' %}?v=1">
+    <link rel="stylesheet" href="{% static 'css/visions.css' %}?v=2">
     {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -31,8 +31,12 @@
                 <li><a href="{% url 'django_app:home_main' %}"{% if current == 'home_main' %} aria-current="page"{% endif %}>Рейтинг</a></li>
                 <li><a href="{% url 'django_app:homework' %}"{% if current == 'homework' or current == 'user_homework_detail' %} aria-current="page"{% endif %}>Задания</a></li>
                 <li><a href="{% url 'django_app:instructions' %}"{% if current == 'instructions' %} aria-current="page"{% endif %}>Инструкция</a></li>
+                {% if request.user.is_authenticated %}<li><a href="{% url 'django_app:rewards' %}"{% if current == 'rewards' %} aria-current="page"{% endif %}>Награды</a></li>{% endif %}
+                {% if request.user.is_staff or request.user.is_superuser %}
+                <li><a href="{% url 'django_app:staff_requests' %}"{% if current == 'staff_requests' %} aria-current="page"{% endif %}>Заявки</a></li>
+                <li><a href="{% url 'django_app:analytics' %}"{% if current == 'analytics' %} aria-current="page"{% endif %}>Аналитика</a></li>
+                {% endif %}
                 <li><a href="{% url 'django_app:about' %}"{% if current == 'about' %} aria-current="page"{% endif %}>О школе</a></li>
-                <li><a href="https://visions.kz/" target="_blank" rel="noopener noreferrer">Visions.kz<span class="visually-hidden"> (откроется в новой вкладке)</span></a></li>
             </ul>
             <ul class="nav-user">
             {% if request.user.is_authenticated %}
@@ -72,7 +76,7 @@
     </div>
 </footer>
 {% endblock footer %}
-<script src="{% static 'js/visions.js' %}?v=1" defer></script>
+<script src="{% static 'js/visions.js' %}?v=2" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

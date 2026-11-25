@@ -3,11 +3,34 @@
 {% block title %}Задания: {{ user.username|replace_underscore }}{% endblock %}
 
 {% block content %}
-<p><a href="{% url 'django_app:homework' %}">Все студенты</a></p>
+<p><a href="{% url 'django_app:homework' %}">Проверка заданий</a></p>
 <div class="page-head">
     <h1>{{ user.username|replace_underscore }}</h1>
     <p>Задания студента, от последнего дедлайна к первому.</p>
 </div>
+
+{% for task in tasks %}{% if task.status == 'pending' %}
+<section class="panel review" id="task-{{ task.id }}" aria-labelledby="review-{{ task.id }}">
+    <span class="status st-pending">Ждёт проверки{% if task.submitted_at %}, сдано {{ task.submitted_at|date:"d.m.Y, H:i" }}{% endif %}</span>
+    <h2 id="review-{{ task.id }}">{{ task.title }}</h2>
+    <div class="form-actions" style="margin-bottom:1rem">
+        {% if task.user_response_file %}<a class="btn btn-ghost btn-sm" href="{% url 'django_app:task_file' task.id 'response' %}">Скачать ответ</a>{% endif %}
+        <a class="btn btn-ghost btn-sm" href="{% url 'django_app:task_file' task.id 'assignment' %}">Задание</a>
+    </div>
+    <form method="post" action="{% url 'django_app:review_task' task.id %}" class="form" data-once>
+        {% csrf_token %}
+        <div class="field">
+            <label for="comment-{{ task.id }}">Комментарий для студента</label>
+            <textarea id="comment-{{ task.id }}" name="comment" maxlength="2000" placeholder="Что получилось хорошо и что исправить"></textarea>
+            <p class="help">При возврате на доработку комментарий обязателен.</p>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" type="submit" name="action" value="accept">Принять, +300 баллов</button>
+            <button class="btn btn-ghost" type="submit" name="action" value="return">Вернуть на доработку</button>
+        </div>
+    </form>
+</section>
+{% endif %}{% endfor %}
 
 <div class="panel table-wrap">
     <table class="table">
@@ -22,7 +45,7 @@
         <tbody>
             {% for task in tasks %}
             <tr>
-                <td>{{ task.title }}</td>
+                <td>{{ task.title }}{% if task.status == 'rejected' and task.rejection_reason %}<br><span class="meta">Комментарий: {{ task.rejection_reason }}</span>{% endif %}</td>
                 <td><span class="status st-{{ task.status }}">{{ task.get_status_display }}</span></td>
                 <td>
                     {% if task.user_response_file %}

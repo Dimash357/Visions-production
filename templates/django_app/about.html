@@ -31,6 +31,7 @@
     <div>
         <section class="panel" aria-labelledby="a-rewards">
             <h2 id="a-rewards">На что обменять баллы</h2>
+            <p class="meta">Обмен — в разделе <a href="{% url 'django_app:rewards' %}">«Награды»</a>.</p>
             <table class="earn">
                 <tbody>
                     <tr><td>Бесплатная встреча с ментором</td><td><span class="points">3000</span></td></tr>
@@ -42,7 +43,7 @@
         {% if user.is_authenticated %}
         <section class="panel" aria-labelledby="a-social">
             <h2 id="a-social">+100 баллов за подписку</h2>
-            <p class="meta">Баллы начисляются один раз за каждую соцсеть. Ссылка откроется в новой вкладке.</p>
+            <p class="meta">Подпишитесь по ссылке — баллы начислятся один раз за каждую соцсеть после проверки куратором.</p>
             <div class="form-actions" style="margin-top:1rem">
                 <a class="btn btn-ghost btn-sm" href="{% url 'django_app:check_subscription_telegram' %}" target="_blank" rel="noopener">Telegram</a>
                 <a class="btn btn-ghost btn-sm" href="{% url 'django_app:check_subscription_instagram' %}" target="_blank" rel="noopener">Instagram</a>
