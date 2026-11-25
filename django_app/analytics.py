@@ -57,7 +57,7 @@ def cohort_report():
     now = timezone.now()
     today, week_ago = timezone.localtime(now).date(), now - timedelta(days=7)
     profiles = list(profile.objects.select_related('user').filter(user__is_staff=False, user__is_superuser=False))
-    tasks = list(Task.objects.select_related('user__profile').filter(user__isnull=False,
+    tasks = list(Task.objects.select_related('user__profile').filter(user__isnull=False, is_archived=False,
                                                                      user__is_staff=False, user__is_superuser=False))
     groups = []
     for key, label, former in (('current', 'Текущий поток', False), ('former', 'Выпускники', True)):

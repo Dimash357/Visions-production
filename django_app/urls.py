@@ -1,5 +1,5 @@
 from django.urls import path, re_path
-from django_app import views
+from django_app import task_admin, views
 
 app_name = 'django_app'
 urlpatterns = [
@@ -26,6 +26,13 @@ urlpatterns = [
     path('telegram/connect/', views.telegram_connect, name='telegram_connect'),
     path('telegram/disconnect/', views.telegram_disconnect, name='telegram_disconnect'),
     path('analytics/', views.analytics, name='analytics'),
+    path('manage/tasks/', task_admin.task_groups, name='task_groups'),
+    path('manage/tasks/new/', task_admin.task_create, name='task_create'),
+    re_path(r'^manage/tasks/(?P<key>[0-9a-f]{32})/$', task_admin.task_group, name='task_group'),
+    re_path(r'^manage/tasks/(?P<key>[0-9a-f]{32})/edit/$', task_admin.task_edit, name='task_edit'),
+    re_path(r'^manage/tasks/(?P<key>[0-9a-f]{32})/deadline/$', task_admin.task_deadline, name='task_deadline'),
+    re_path(r'^manage/tasks/(?P<key>[0-9a-f]{32})/archive/$', task_admin.task_archive, name='task_archive'),
+    re_path(r'^manage/tasks/(?P<key>[0-9a-f]{32})/delete/$', task_admin.task_delete, name='task_delete'),
     path('about/', views.about, name='about'),
     path('check-subscription/telegram/', views.check_subscription_telegram, name='check_subscription_telegram'),
     path('check-subscription/linkedn/', views.check_subscription_linkedn, name='check_subscription_linkedn'),

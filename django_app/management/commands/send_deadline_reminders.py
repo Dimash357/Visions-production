@@ -23,7 +23,7 @@ class Command(BaseCommand):
         # Дедлайн — конец дня; напоминаем, когда до него осталось не больше суток
         tasks = (Task.objects
                  .select_related('user', 'user__profile')
-                 .filter(user__isnull=False, reminder_sent_at__isnull=True, is_completed=False,
+                 .filter(user__isnull=False, reminder_sent_at__isnull=True, is_completed=False, is_archived=False,
                          is_approved=False, user__profile__is_former_user=False)
                  .filter(Q(extended_deadline__isnull=True, deadline__gte=today, deadline__lte=tomorrow)
                          | Q(extended_deadline__gte=today, extended_deadline__lte=tomorrow)))

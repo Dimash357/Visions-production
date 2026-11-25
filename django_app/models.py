@@ -3,6 +3,11 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 
 
+def local_today():
+    """Сегодняшняя дата в TIME_ZONE проекта (Asia/Almaty), а не в UTC."""
+    return timezone.localtime().date()
+
+
 class profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     image = models.ImageField(upload_to='profile_images', default='profile_images/default.jpg')
@@ -34,7 +39,7 @@ class Task(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tasks', null=True)
     title = models.CharField(max_length=255)
     file = models.FileField(upload_to='tasks/')
-    deadline = models.DateField(default=timezone.now)
+    deadline = models.DateField(default=local_today)
     extended_deadline = models.DateField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     in_process = models.BooleanField(default=True)
@@ -47,6 +52,11 @@ class Task(models.Model):
     submitted_at = models.DateTimeField(blank=True, null=True)
     reviewed_at = models.DateTimeField(blank=True, null=True)
     reminder_sent_at = models.DateTimeField(blank=True, null=True, editable=False)
+    # Копии одного назначения (разным студентам) связаны общим ключом
+    group_key = models.CharField(max_length=32, blank=True, default='', db_default='', db_index=True, editable=False)
+    # Архив: скрыто у студента, без штрафов и напоминаний, данные и баллы сохраняются
+    is_archived = models.BooleanField(default=False, db_default=False)
+    created_at = models.DateTimeField(blank=True, null=True, editable=False)
 
     STATUS_CHOICES = [
         ('pending', 'Ожидает проверки'),
@@ -69,7 +79,7 @@ class Task(models.Model):
 
     def compute_status(self, today=None):
         """Статус задания без побочных эффектов (та же логика, что раньше была в save)."""
-        today = today or timezone.localtime().date()
+        today = today or local_today()
         current_deadline = self.extended_deadline or self.deadline
         if self.is_approved:
             return "completed"
@@ -84,6 +94,8 @@ class Task(models.Model):
         return "process"
 
     def needs_refresh(self, today=None):
+        if self.is_archived:
+            return False
         status = self.compute_status(today)
         return status != self.status or (status == "overdue" and self.user_id and not self.penalty_applied)
 
@@ -99,6 +111,11 @@ class Task(models.Model):
         from django.db.models.functions import Greatest
 
         is_new = self.pk is None
+        if is_new and self.created_at is None:
+            self.created_at = timezone.now()
+        if is_new and not self.group_key:
+            import uuid
+            self.group_key = uuid.uuid4().hex  # задания из Django-админки тоже управляются с сайта
         self.status = self.compute_status()
 
         with transaction.atomic():
@@ -107,7 +124,7 @@ class Task(models.Model):
                 self.in_process = False
             elif self.status == "rejected":
                 self.in_process = True
-            elif self.status == "overdue" and self.user_id and not self.penalty_applied:
+            elif self.status == "overdue" and self.user_id and not self.penalty_applied and not self.is_archived:
                 # Автоматический штраф за просрочку: строго один раз, даже при параллельных сохранениях
                 if self._claim_flag('penalty_applied'):
                     profile.objects.filter(user_id=self.user_id).update(

@@ -591,3 +591,237 @@ class FeatureReviewTests(TestCase):
         mail.outbox.clear()
         call_command('send_deadline_reminders', stdout=open('/dev/null', 'w'))  # без captureOnCommitCallbacks
         self.assertEqual(len(mail.outbox), 1)
+
+
+TM_MEDIA = tempfile.mkdtemp()
+
+
+@override_settings(
+    CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
+    ALLOWED_HOSTS=['testserver'], SECURE_SSL_REDIRECT=False,
+    SESSION_COOKIE_SECURE=False, CSRF_COOKIE_SECURE=False, MEDIA_ROOT=TM_MEDIA,
+)
+class TaskManagementTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(TM_MEDIA, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        import os
+        shutil.rmtree(os.path.join(TM_MEDIA, 'tasks'), ignore_errors=True)
+        self.a = User.objects.create_user('a', 'a@example.com', 'x')
+        self.b = User.objects.create_user('b', 'b@example.com', 'x')
+        self.c = User.objects.create_user('c', 'c@example.com', 'x')
+        self.old = User.objects.create_user('old', 'o@example.com', 'x')
+        self.old.profile.is_former_user = True
+        self.old.profile.save()
+        self.mentor = User.objects.create_user('m', 'm@example.com', 'x', is_staff=True)
+        self.admin = User.objects.create_superuser('root', 'r@example.com', 'x')
+        self.client.force_login(self.mentor)
+        self.today = timezone.localtime().date()
+
+    def stored_files(self):
+        import os
+        path = os.path.join(TM_MEDIA, 'tasks')
+        return sorted(os.listdir(path)) if os.path.isdir(path) else []
+
+    def create(self, students, title='Sprint Planning', batch=None, **extra):
+        import uuid
+        data = {'title': title, 'description': 'Цель спринта', 'batch': batch or uuid.uuid4().hex,
+                'deadline': (self.today + datetime.timedelta(days=5)).isoformat(),
+                'students': [u.id for u in students], 'file': SimpleUploadedFile('plan.pdf', PDF)}
+        data.update(extra)
+        data = {k: v for k, v in data.items() if v is not None}
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(reverse('django_app:task_create'), data)
+
+    def key(self, title='Sprint Planning'):
+        return Task.objects.filter(title=title).values_list('group_key', flat=True).first()
+
+    # --- create / duplicates / atomicity ---
+    def test_create_for_selected_students_shares_one_file(self):
+        r = self.create([self.a, self.b])
+        key = self.key()
+        self.assertRedirects(r, reverse('django_app:task_group', args=[key]))
+        self.assertEqual(set(Task.objects.values_list('user__username', flat=True)), {'a', 'b'})
+        self.assertEqual(Task.objects.values('file').distinct().count(), 1)
+        self.assertEqual(len(self.stored_files()), 1)
+        self.assertEqual(Notification.objects.filter(message__contains='Sprint Planning').count(), 2)
+
+    def test_resubmitted_form_is_idempotent(self):
+        import uuid
+        batch = uuid.uuid4().hex
+        self.create([self.a], batch=batch)
+        self.create([self.a, self.b], batch=batch)
+        self.assertEqual(Task.objects.count(), 1)
+        self.assertEqual(len(self.stored_files()), 1)  # второй файл не остался на диске
+
+    def test_duplicate_title_is_skipped_per_student(self):
+        self.create([self.a])
+        self.create([self.a, self.b], title='sprint planning')
+        self.assertEqual(Task.objects.filter(user=self.a).count(), 1)
+        self.assertEqual(Task.objects.filter(user=self.b).count(), 1)
+        self.create([self.a], title='Sprint Planning')  # всем уже назначено
+        self.assertEqual(Task.objects.count(), 2)
+
+    def test_create_validation_leaves_no_files(self):
+        past = (self.today - datetime.timedelta(days=1)).isoformat()
+        self.assertEqual(self.create([self.a], deadline=past).status_code, 400)
+        self.assertEqual(self.create([self.a], file=SimpleUploadedFile('x.html', b'<script>')).status_code, 400)
+        self.assertEqual(self.create([]).status_code, 400)
+        self.assertEqual(self.create([self.old]).status_code, 400)  # выпускник не из текущего потока
+        self.assertEqual(self.create([self.a], file=None).status_code, 400)
+        self.assertFalse(Task.objects.exists())
+        self.assertEqual(self.stored_files(), [])
+
+    def test_batch_is_atomic(self):
+        from unittest import mock
+        original = Task.save
+        calls = {'n': 0}
+
+        def flaky(task, *args, **kwargs):
+            calls['n'] += 1
+            if calls['n'] == 2:
+                raise RuntimeError('db failure')
+            return original(task, *args, **kwargs)
+        with mock.patch.object(Task, 'save', flaky), self.assertRaises(RuntimeError):
+            self.create([self.a, self.b, self.c])
+        self.assertFalse(Task.objects.exists())
+        self.assertEqual(self.stored_files(), [])
+
+    # --- permissions ---
+    def test_student_has_no_access(self):
+        self.create([self.a])
+        key = self.key()
+        self.client.force_login(self.a)
+        for url in [reverse('django_app:task_groups'), reverse('django_app:task_create'),
+                    reverse('django_app:task_group', args=[key]), reverse('django_app:task_edit', args=[key])]:
+            self.assertEqual(self.client.get(url).status_code, 302, url)
+        for name in ['task_deadline', 'task_archive', 'task_delete']:
+            self.client.post(reverse(f'django_app:{name}', args=[key]), {'new_deadline': '2099-01-01', 'tasks': []})
+        self.assertEqual(Task.objects.filter(is_archived=False).count(), 1)
+
+    def test_only_superuser_can_delete(self):
+        self.create([self.a])
+        key = self.key()
+        self.client.post(reverse('django_app:task_delete', args=[key]))
+        self.assertTrue(Task.objects.exists())
+        self.client.force_login(self.admin)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertRedirects(self.client.post(reverse('django_app:task_delete', args=[key])),
+                                 reverse('django_app:task_groups'))
+        self.assertFalse(Task.objects.exists())
+        self.assertFalse(Notification.objects.filter(message__contains='Sprint Planning').exists())
+        self.assertEqual(self.stored_files(), [])
+
+    def test_delete_refused_after_submission(self):
+        self.create([self.a])
+        task = Task.objects.get()
+        task.user_response_file = 'tasks1/answer.pdf'
+        task.is_completed = True
+        task.save()
+        self.client.force_login(self.admin)
+        self.client.post(reverse('django_app:task_delete', args=[task.group_key]))
+        self.assertTrue(Task.objects.filter(pk=task.pk).exists())
+
+    # --- edit / duplicate / shared files ---
+    def test_edit_updates_all_copies_and_replaces_file(self):
+        self.create([self.a, self.b])
+        key, old_file = self.key(), Task.objects.first().file.name
+        new_deadline = (self.today + datetime.timedelta(days=10)).isoformat()
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(reverse('django_app:task_edit', args=[key]), {
+                'title': 'Sprint Planning v2', 'description': 'Новое', 'deadline': new_deadline,
+                'file': SimpleUploadedFile('plan2.pdf', PDF)})
+        self.assertRedirects(r, reverse('django_app:task_group', args=[key]))
+        self.assertEqual(set(Task.objects.values_list('title', flat=True)), {'Sprint Planning v2'})
+        self.assertEqual(Task.objects.values('file').distinct().count(), 1)
+        self.assertNotEqual(Task.objects.first().file.name, old_file)
+        self.assertEqual(len(self.stored_files()), 1)  # старый файл удалён — на него никто не ссылается
+
+    def test_duplicate_reuses_file_and_keeps_it_on_source_delete(self):
+        self.create([self.a])
+        src = self.key()
+        self.assertContains(self.client.get(reverse('django_app:task_create') + f'?from={src}'), 'Дублирование')
+        self.create([self.b], title='Sprint Planning (поток 2)', file=None, source=src)
+        self.assertEqual(Task.objects.values('file').distinct().count(), 1)
+        self.client.force_login(self.admin)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse('django_app:task_delete', args=[src]))
+        self.assertEqual(Task.objects.count(), 1)
+        self.assertEqual(len(self.stored_files()), 1)  # файл нужен копии
+
+    def test_source_key_cannot_point_to_arbitrary_file(self):
+        self.assertEqual(self.create([self.a], file=None, source='0' * 32).status_code, 400)
+        self.assertEqual(self.create([self.a], file=None, source='../../etc/passwd').status_code, 400)
+
+    # --- deadlines / archive ---
+    def test_bulk_deadline_shift_for_subset(self):
+        self.create([self.a, self.b])
+        key = self.key()
+        ta = Task.objects.get(user=self.a)
+        later = self.today + datetime.timedelta(days=20)
+        self.client.post(reverse('django_app:task_deadline', args=[key]),
+                         {'new_deadline': later.isoformat(), 'tasks': [ta.id]})
+        ta.refresh_from_db()
+        tb = Task.objects.get(user=self.b)
+        self.assertEqual((ta.extended_deadline, ta.status), (later, 'deadline_extended'))
+        self.assertIsNone(tb.extended_deadline)
+        self.assertTrue(Notification.objects.filter(user=self.a, message__contains='перенесён').exists())
+        earlier = self.today + datetime.timedelta(days=1)
+        self.client.post(reverse('django_app:task_deadline', args=[key]),
+                         {'new_deadline': earlier.isoformat(), 'tasks': [tb.id]})
+        tb.refresh_from_db()
+        self.assertEqual((tb.deadline, tb.extended_deadline), (earlier, None))
+
+    def test_archive_hides_task_and_stops_penalties(self):
+        self.create([self.a])
+        key = self.key()
+        self.client.post(reverse('django_app:task_archive', args=[key]), {'action': 'archive'})
+        Task.objects.update(deadline=self.today - datetime.timedelta(days=3))
+        student = self.client_class()
+        student.force_login(self.a)
+        self.assertNotContains(student.get(reverse('django_app:homework')), '<h2>Sprint Planning</h2>', html=False)
+        Task.objects.get().save()
+        self.a.profile.refresh_from_db()
+        self.assertEqual(self.a.profile.points, 0)
+        self.assertFalse(Task.objects.get().penalty_applied)
+        self.client.force_login(self.mentor)
+        self.client.post(reverse('django_app:task_archive', args=[key]), {'action': 'restore'})
+        self.assertFalse(Task.objects.get().is_archived)
+
+    def test_new_task_page_is_not_duplicate_and_admin_tasks_get_group(self):
+        legacy = Task(user=self.a, title='Из админки', deadline=self.today)
+        legacy.file.name = 'tasks/x.pdf'
+        legacy.save()
+        self.assertEqual(len(legacy.group_key), 32)
+        r = self.client.get(reverse('django_app:task_create'))
+        self.assertContains(r, 'Новое задание')
+        self.assertNotContains(r, 'Дублирование')
+
+    def test_pages_render(self):
+        self.create([self.a])
+        key = self.key()
+        for url in [reverse('django_app:task_groups'), reverse('django_app:task_groups') + '?archived=1',
+                    reverse('django_app:task_create') + f'?student={self.a.id}',
+                    reverse('django_app:task_group', args=[key]), reverse('django_app:task_edit', args=[key]),
+                    reverse('django_app:user_homework_detail', args=[self.a.id])]:
+            self.assertEqual(self.client.get(url).status_code, 200, url)
+
+
+class TimezoneTests(TestCase):
+    def test_dates_follow_almaty_not_utc(self):
+        from unittest import mock
+        from .models import local_today
+        # 20:00 UTC 10 января = 01:00 11 января в Алматы
+        fake_now = datetime.datetime(2026, 1, 10, 20, 0, tzinfo=datetime.timezone.utc)
+        with mock.patch('django.utils.timezone.now', return_value=fake_now):
+            self.assertEqual(local_today(), datetime.date(2026, 1, 11))
+            user = User.objects.create_user('tz', 'tz@example.com', 'x')
+            task = Task(user=user, title='TZ')
+            self.assertEqual(task.deadline, datetime.date(2026, 1, 11))
+            task.deadline = datetime.date(2026, 1, 10)
+            self.assertEqual(task.compute_status(), 'overdue')
+            task.deadline = datetime.date(2026, 1, 11)
+            self.assertEqual(task.compute_status(), 'process')

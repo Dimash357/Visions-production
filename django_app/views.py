@@ -211,12 +211,12 @@ def homework(request):
         return redirect('django_app:login')
 
     if is_staff(request.user):
-        refresh_task_statuses(Task.objects.select_related('user'))
+        refresh_task_statuses(Task.objects.filter(is_archived=False).select_related('user'))
         users = (User.objects
                  .filter(profile__is_former_user=False)
                  .select_related('profile')
                  .order_by('-profile__points'))
-        pending = (Task.objects.filter(status='pending', user__isnull=False)
+        pending = (Task.objects.filter(status='pending', user__isnull=False, is_archived=False)
                    .select_related('user').order_by(F('submitted_at').asc(nulls_last=True), 'deadline'))
         return render(request, 'django_app/homework_admin.html', {
             'users': users,
@@ -225,7 +225,7 @@ def homework(request):
                               + RewardRedemption.objects.filter(status=RewardRedemption.REQUESTED).count()),
         })
 
-    tasks = list(Task.objects.filter(user=request.user).order_by('is_completed'))
+    tasks = list(Task.objects.filter(user=request.user, is_archived=False).order_by('is_completed'))
     refresh_task_statuses(tasks)
     return render(request, 'django_app/homework.html', {'tasks': tasks})
 
@@ -236,7 +236,7 @@ def user_homework_detail(request, user_id):
         return redirect('django_app:homework')
 
     user = get_object_or_404(User, id=user_id)
-    tasks = Task.objects.filter(user=user).order_by('-deadline')
+    tasks = Task.objects.filter(user=user).order_by('is_archived', '-deadline')
     return render(request, 'django_app/user_homework_detail.html', {'user': user, 'tasks': tasks})
 
 
@@ -272,7 +272,7 @@ def task_file(request, task_id, kind):
 @login_required
 @require_POST
 def upload_task(request, task_id):
-    task = Task.objects.filter(id=task_id, user=request.user).first()
+    task = Task.objects.filter(id=task_id, user=request.user, is_archived=False).first()
     if task is None:
         logger.warning("Upload to foreign or missing task %s by user %s", task_id, request.user.pk)
         return redirect('django_app:homework')
@@ -421,7 +421,7 @@ def review_task(request, task_id):
 
     with transaction.atomic():
         # Только один из параллельных запросов (двух менторов) может принять решение по работе
-        claimed = Task.objects.filter(pk=task.pk, status='pending').update(reviewed_at=timezone.now())
+        claimed = Task.objects.filter(pk=task.pk, status='pending', is_archived=False).update(reviewed_at=timezone.now())
         if not claimed:
             messages.info(request, f"«{task.title}» уже не ждёт проверки.")
             return back
