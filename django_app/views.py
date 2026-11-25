@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 import mimetypes
 import os
 import re
@@ -9,7 +10,6 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.core.mail import EmailMessage
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import F
@@ -22,7 +22,8 @@ from django.utils.text import get_valid_filename
 from django.views.decorators.http import require_POST
 
 from .forms import ProfileUpdateForm
-from .models import Notification, Task, profile
+from .models import Notification, Reward, RewardRedemption, SocialClaim, Task, profile
+from .notify import send_email_background
 from .security import (
     client_ip,
     login_blocked,
@@ -110,19 +111,31 @@ SOCIAL_NETWORKS = {
 }
 
 
+def _social_message(label):
+    return f"Вы подписались на {label} и получили 100 очков!"
+
+
 def _social_subscription(request, network):
-    """Переход на соцсеть; баллы начисляются строго один раз на сеть."""
+    """Переход на соцсеть. Баллы — после подтверждения сотрудником (или сразу, если так настроено)."""
     label, target = SOCIAL_NETWORKS[network]
-    if not settings.SOCIAL_POINTS_AUTO_AWARD:
+    message = _social_message(label)
+
+    if Notification.objects.filter(user=request.user, message=message).exists():
+        messages.info(request, f"Вы уже получили баллы за подписку на {label}.")
         return redirect(target)
 
-    message = f"Вы подписались на {label} и получили 100 очков!"
-    already = not award_points_once(request.user, message, 100)
+    if settings.SOCIAL_POINTS_AUTO_AWARD:
+        if award_points_once(request.user, message, 100):
+            messages.success(request, f"Вы успешно подписались на {label}! Баллы начислены.")
+        return redirect(target)
 
-    if already:
-        messages.info(request, f"Вы уже получили баллы за подписку на {label}.")
+    claim, created = SocialClaim.objects.get_or_create(user=request.user, network=network)
+    if created:
+        messages.success(request, f"Заявка за подписку на {label} отправлена. Баллы начислим после проверки.")
+    elif claim.status == SocialClaim.REJECTED:
+        messages.info(request, f"Подписка на {label} не подтверждена. Если вы подписались, напишите куратору.")
     else:
-        messages.success(request, f"Вы успешно подписались на {label}! Баллы начислены.")
+        messages.info(request, f"Заявка за подписку на {label} уже на проверке.")
     return redirect(target)
 
 
@@ -203,7 +216,14 @@ def homework(request):
                  .filter(profile__is_former_user=False)
                  .select_related('profile')
                  .order_by('-profile__points'))
-        return render(request, 'django_app/homework_admin.html', {'users': users})
+        pending = (Task.objects.filter(status='pending', user__isnull=False)
+                   .select_related('user').order_by(F('submitted_at').asc(nulls_last=True), 'deadline'))
+        return render(request, 'django_app/homework_admin.html', {
+            'users': users,
+            'pending': pending,
+            'open_requests': (SocialClaim.objects.filter(status=SocialClaim.PENDING).count()
+                              + RewardRedemption.objects.filter(status=RewardRedemption.REQUESTED).count()),
+        })
 
     tasks = list(Task.objects.filter(user=request.user).order_by('is_completed'))
     refresh_task_statuses(tasks)
@@ -283,6 +303,7 @@ def upload_task(request, task_id):
     # Повторная сдача после доработки: комментарий ментора уже сохранён в уведомлении,
     # поэтому сбрасываем его, чтобы задание снова попало в статус «Ждёт проверки».
     task.rejection_reason = None
+    task.submitted_at = timezone.now()
     task.save()
 
     Notification.objects.create(
@@ -291,25 +312,13 @@ def upload_task(request, task_id):
     )
     messages.success(request, f"Ответ на «{task.title}» отправлен на проверку.")
 
-    recipients = [e for e in settings.TASK_NOTIFY_EMAILS if e]
-    if recipients:
-        email = EmailMessage(
-            subject='Новое загруженное задание',
-            body=(
-                f"Пользователь {request.user.username} загрузил задание:\n"
-                f"Название: {task.title}\n"
-                f"Файл: {os.path.basename(task.user_response_file.name)}\n"
-                f"Открыть: {request.build_absolute_uri(reverse('django_app:task_file', args=[task.id, 'response']))}"
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=recipients,
-        )
-        try:
-            if task.user_response_file.size <= 20 * 1024 * 1024:  # лимит вложений почты
-                email.attach_file(task.user_response_file.path)
-            email.send(fail_silently=False)
-        except Exception:
-            logger.exception("Failed to send task upload e-mail for task %s", task.id)
+    review_url = request.build_absolute_uri(reverse('django_app:user_homework_detail', args=[request.user.id]))
+    send_email_background(
+        'Новое задание на проверку',
+        f"{request.user.username} отправил(а) задание «{task.title}».\n"
+        f"Проверить в кабинете: {review_url}",
+        settings.TASK_NOTIFY_EMAILS,
+    )
 
     return redirect('django_app:homework')
 
@@ -390,3 +399,167 @@ def logout_f(request):
     if request.user.is_authenticated:
         return redirect('django_app:home_main')
     return redirect('django_app:login')
+
+
+# ---------- Mentor review ----------
+
+@login_required
+@user_passes_test(is_staff)
+@require_POST
+def review_task(request, task_id):
+    """Ментор принимает работу или возвращает её на доработку с комментарием."""
+    task = get_object_or_404(Task.objects.select_related('user'), id=task_id)
+    back = redirect('django_app:user_homework_detail', user_id=task.user_id)
+    action = request.POST.get('action')
+    comment = request.POST.get('comment', '').strip()
+
+    if action not in ('accept', 'return'):
+        return back
+    if action == 'return' and not comment:
+        messages.error(request, "Напишите, что нужно исправить: без комментария студент не поймёт, что доработать.")
+        return back
+
+    with transaction.atomic():
+        # Только один из параллельных запросов (двух менторов) может принять решение по работе
+        claimed = Task.objects.filter(pk=task.pk, status='pending').update(reviewed_at=timezone.now())
+        if not claimed:
+            messages.info(request, f"«{task.title}» уже не ждёт проверки.")
+            return back
+        task.refresh_from_db()
+        subject, text = _apply_review(request, task, action, comment)
+
+    send_email_background(subject, f"{text}\n\n{settings.SITE_URL}{reverse('django_app:homework')}", [task.user.email])
+    return back
+
+
+def _apply_review(request, task, action, comment):
+    if action == 'accept':
+        task.is_approved = True
+        task.save()
+        subject, text = 'Задание принято', f"Ментор принял задание «{task.title}». Начислено {Task.APPROVAL_POINTS} баллов."
+        if comment:
+            text += f"\nКомментарий: {comment}"
+            Notification.objects.create(user=task.user, message=f"Комментарий к заданию '{task.title}': {comment}")
+        messages.success(request, f"«{task.title}» принято, студенту начислено {Task.APPROVAL_POINTS} баллов.")
+    else:
+        task.rejection_reason = comment[:2000]
+        task.is_completed = False
+        task.in_process = True
+        task.save()  # уведомление о доработке создаёт сигнал
+        subject, text = 'Задание на доработке', f"Ментор вернул задание «{task.title}» на доработку.\nКомментарий: {comment}"
+        messages.success(request, f"«{task.title}» возвращено на доработку.")
+    return subject, text
+
+
+# ---------- Rewards ----------
+
+@login_required
+def rewards(request):
+    balance = request.user.profile.available_points()
+    reward_list = list(Reward.objects.filter(is_active=True))
+    for reward in reward_list:
+        reward.missing = max(0, reward.cost - balance)
+    return render(request, 'django_app/rewards.html', {
+        'rewards': reward_list,
+        'balance': balance,
+        'my_redemptions': RewardRedemption.objects.filter(user=request.user).select_related('reward')[:20],
+    })
+
+
+@login_required
+@require_POST
+def redeem_reward(request, reward_id):
+    reward = get_object_or_404(Reward, id=reward_id, is_active=True)
+    with transaction.atomic():
+        # Блокируем строку профиля (на SQLite — блокировка записи), чтобы двойной клик не потратил баллы дважды
+        profile.objects.filter(user=request.user).update(points=F('points'))
+        user_profile = profile.objects.get(user=request.user)
+        if user_profile.available_points() < reward.cost:
+            messages.error(request, f"Не хватает баллов: нужно {reward.cost}, доступно {user_profile.available_points()}.")
+            return redirect('django_app:rewards')
+        RewardRedemption.objects.create(user=request.user, reward=reward, cost=reward.cost)
+        Notification.objects.create(user=request.user,
+                                    message=f"Заявка на награду «{reward.title}» принята. Мы свяжемся с вами.")
+    send_email_background(
+        'Заявка на награду',
+        f"{request.user.username} обменял(а) {reward.cost} баллов на «{reward.title}».\n"
+        f"Обработать: {settings.SITE_URL}{reverse('django_app:staff_requests')}",
+        settings.STAFF_NOTIFY_EMAILS,
+    )
+    messages.success(request, f"Заявка на «{reward.title}» отправлена. Куратор свяжется с вами.")
+    return redirect('django_app:rewards')
+
+
+# ---------- Staff requests (social claims, rewards) ----------
+
+@login_required
+@user_passes_test(is_staff)
+def staff_requests(request):
+    if request.method == 'POST':
+        kind, action = request.POST.get('kind'), request.POST.get('action')
+        obj_id = request.POST.get('id', '')
+        if not obj_id.isdigit():
+            return redirect('django_app:staff_requests')
+        now = timezone.now()
+        if kind == 'claim' and action in ('approve', 'reject'):
+            status = SocialClaim.APPROVED if action == 'approve' else SocialClaim.REJECTED
+            with transaction.atomic():
+                # Решение по заявке принимается ровно один раз, даже при двух одновременных кликах
+                if SocialClaim.objects.filter(id=obj_id, status=SocialClaim.PENDING).update(
+                        status=status, reviewed_at=now, reviewed_by=request.user):
+                    claim = SocialClaim.objects.select_related('user').get(id=obj_id)
+                    label = SOCIAL_NETWORKS.get(claim.network, (claim.network,))[0]
+                    if action == 'approve':
+                        award_points_once(claim.user, _social_message(label), 100)
+                    else:
+                        Notification.objects.create(user=claim.user,
+                                                    message=f"Подписка на {label} не подтверждена.")
+        elif kind == 'redemption' and action in ('fulfill', 'cancel'):
+            status = RewardRedemption.FULFILLED if action == 'fulfill' else RewardRedemption.CANCELLED
+            with transaction.atomic():
+                if RewardRedemption.objects.filter(id=obj_id, status=RewardRedemption.REQUESTED).update(
+                        status=status, handled_at=now, handled_by=request.user):
+                    red = RewardRedemption.objects.select_related('reward').get(id=obj_id)
+                    text = (f"Награда «{red.reward.title}» выдана." if action == 'fulfill'
+                            else f"Заявка на «{red.reward.title}» отменена, {red.cost} баллов вернулись на баланс.")
+                    Notification.objects.create(user_id=red.user_id, message=text)
+        return redirect('django_app:staff_requests')
+
+    return render(request, 'django_app/staff_requests.html', {
+        'claims': SocialClaim.objects.filter(status=SocialClaim.PENDING).select_related('user'),
+        'redemptions': RewardRedemption.objects.filter(status=RewardRedemption.REQUESTED).select_related('user', 'reward'),
+        'networks': {k: v[0] for k, v in SOCIAL_NETWORKS.items()},
+    })
+
+
+# ---------- Telegram ----------
+
+@login_required
+@require_POST
+def telegram_connect(request):
+    import secrets
+    bot = settings.TELEGRAM_BOT_USERNAME
+    if not (bot and settings.TELEGRAM_BOT_TOKEN):
+        messages.error(request, "Telegram-бот пока не настроен. Напишите куратору.")
+        return redirect('django_app:profile')
+    token = secrets.token_urlsafe(24)
+    profile.objects.filter(user=request.user).update(
+        telegram_link_token=token, telegram_link_expires=timezone.now() + timedelta(minutes=30))
+    return redirect(f"https://t.me/{bot}?start={token}")
+
+
+@login_required
+@require_POST
+def telegram_disconnect(request):
+    profile.objects.filter(user=request.user).update(telegram_chat_id='', telegram_link_token='', telegram_link_expires=None)
+    messages.success(request, "Telegram отключён. Напоминания будут приходить на почту.")
+    return redirect('django_app:profile')
+
+
+# ---------- Analytics ----------
+
+@login_required
+@user_passes_test(is_staff)
+def analytics(request):
+    from .analytics import cohort_report
+    return render(request, 'django_app/analytics.html', cohort_report())

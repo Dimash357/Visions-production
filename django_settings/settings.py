@@ -62,6 +62,11 @@ TASK_NOTIFY_EMAILS = config("TASK_NOTIFY_EMAILS", default=EMAIL_HOST_USER, cast=
 DEBUG_LOG = False
 
 TELEGRAM_BOT_TOKEN = config("TELEGRAM_BOT_TOKEN", default="")
+TELEGRAM_BOT_USERNAME = config("TELEGRAM_BOT_USERNAME", default="")  # без @
+# Публичный адрес сайта для ссылок в напоминаниях (команды cron не знают домен)
+SITE_URL = config("SITE_URL", default="https://visions-hw.kz").rstrip("/")
+# Кому приходят заявки на награды и подписки (через запятую); по умолчанию — как для заданий
+STAFF_NOTIFY_EMAILS = config("STAFF_NOTIFY_EMAILS", default=",".join(TASK_NOTIFY_EMAILS), cast=Csv())
 
 # --- Production security (включается автоматически при DEBUG=False) ---
 if config("USE_X_FORWARDED_PROTO", default=False, cast=bool):
@@ -105,7 +110,7 @@ LOGIN_LOCKOUT_SECONDS = config("LOGIN_LOCKOUT_SECONDS", default=900, cast=int)
 TRUST_X_FORWARDED_FOR = config("TRUST_X_FORWARDED_FOR", default=False, cast=bool)
 
 # Начислять ли баллы за подписки автоматически (подписку проверить нельзя)
-SOCIAL_POINTS_AUTO_AWARD = config("SOCIAL_POINTS_AUTO_AWARD", default=True, cast=bool)
+SOCIAL_POINTS_AUTO_AWARD = config("SOCIAL_POINTS_AUTO_AWARD", default=False, cast=bool)
 
 # Общий для всех gunicorn-воркеров кеш (нужен для блокировки перебора паролей)
 CACHES = {

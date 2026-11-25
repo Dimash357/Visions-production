@@ -23,12 +23,14 @@ def remember_previous_state(sender, instance, **kwargs):
     instance._previous_rejection_reason = None
     if not instance.pk:
         return
-    old = Task.objects.filter(pk=instance.pk).only('deadline', 'rejection_reason').first()
+    old = Task.objects.filter(pk=instance.pk).only('deadline', 'extended_deadline', 'rejection_reason').first()
     if old is None:
         return
     instance._previous_rejection_reason = old.rejection_reason
     if old.deadline != instance.deadline and instance.deadline > old.deadline:
         instance.penalty_applied = False
+    if (old.deadline, old.extended_deadline) != (instance.deadline, instance.extended_deadline):
+        instance.reminder_sent_at = None  # новый срок — новое напоминание
 
 
 @receiver(post_save, sender=Task)

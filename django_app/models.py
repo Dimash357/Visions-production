@@ -12,9 +12,22 @@ class profile(models.Model):
     is_eligible_for_testing = models.BooleanField(default=False)
     passed_testing = models.BooleanField(default=False)
     is_former_user = models.BooleanField(default=False)
+    # Telegram-напоминания: chat_id появляется после /start в боте
+    telegram_chat_id = models.CharField(max_length=32, blank=True, default='', db_default='')
+    telegram_link_token = models.CharField(max_length=40, blank=True, default='', db_default='', db_index=True)
+    telegram_link_expires = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return f'{self.user.username}'
+
+    def spent_points(self):
+        return RewardRedemption.objects.filter(
+            user_id=self.user_id, status__in=RewardRedemption.ACTIVE_STATUSES
+        ).aggregate(total=models.Sum('cost'))['total'] or 0
+
+    def available_points(self):
+        # Рейтинг (points) не уменьшается при обмене — тратится только доступный баланс
+        return max(0, self.points - self.spent_points())
 
 
 class Task(models.Model):
@@ -31,6 +44,9 @@ class Task(models.Model):
     recipient_email = models.EmailField(null=False, blank=False, default='sarsendimas@gmail.com')
     penalty_applied = models.BooleanField(default=False)
     user_response_file = models.FileField(upload_to='tasks1/', blank=True, null=True)
+    submitted_at = models.DateTimeField(blank=True, null=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    reminder_sent_at = models.DateTimeField(blank=True, null=True, editable=False)
 
     STATUS_CHOICES = [
         ('pending', 'Ожидает проверки'),
@@ -115,7 +131,7 @@ class Task(models.Model):
 
             if kwargs.get('update_fields') is not None:
                 kwargs['update_fields'] = set(kwargs['update_fields']) | {
-                    'status', 'is_completed', 'in_process', 'penalty_applied', 'points_awarded'}
+                    'status', 'is_completed', 'in_process', 'penalty_applied', 'points_awarded', 'reminder_sent_at'}
 
             super().save(*args, **kwargs)
 
@@ -137,3 +153,57 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"Notification for {self.user.username}: {self.message[:50]}"
+
+
+class Reward(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    cost = models.PositiveIntegerField()
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ('sort_order', 'cost')
+
+    def __str__(self):
+        return f'{self.title} ({self.cost})'
+
+
+class RewardRedemption(models.Model):
+    REQUESTED, FULFILLED, CANCELLED = 'requested', 'fulfilled', 'cancelled'
+    STATUS_CHOICES = [(REQUESTED, 'Ожидает выдачи'), (FULFILLED, 'Выдано'), (CANCELLED, 'Отменено')]
+    ACTIVE_STATUSES = (REQUESTED, FULFILLED)
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='redemptions')
+    reward = models.ForeignKey(Reward, on_delete=models.PROTECT)
+    cost = models.PositiveIntegerField()  # цена на момент обмена
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=REQUESTED)
+    created_at = models.DateTimeField(auto_now_add=True)
+    handled_at = models.DateTimeField(blank=True, null=True)
+    handled_by = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True, related_name='+')
+
+    class Meta:
+        ordering = ('-created_at',)
+
+    def __str__(self):
+        return f'{self.user} → {self.reward.title}'
+
+
+class SocialClaim(models.Model):
+    """Заявка «я подписался»: баллы начисляются только после подтверждения сотрудником."""
+    PENDING, APPROVED, REJECTED = 'pending', 'approved', 'rejected'
+    STATUS_CHOICES = [(PENDING, 'На проверке'), (APPROVED, 'Подтверждено'), (REJECTED, 'Не подтверждено')]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='social_claims')
+    network = models.CharField(max_length=20)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True, related_name='+')
+
+    class Meta:
+        ordering = ('-created_at',)
+        constraints = [models.UniqueConstraint(fields=['user', 'network'], name='uniq_social_claim')]
+
+    def __str__(self):
+        return f'{self.user} · {self.network}'

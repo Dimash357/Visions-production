@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from django.contrib.auth.models import User
-from .models import profile, Notification, Task
+from .models import profile, Notification, Reward, RewardRedemption, SocialClaim, Task
 
 
 class TaskAdminForm(forms.ModelForm):
@@ -43,6 +43,27 @@ class NotificationAdmin(admin.ModelAdmin):
 admin.site.register(profile)
 admin.site.register(Task, TaskAdmin)
 admin.site.register(Notification, NotificationAdmin)
+
+
+@admin.register(Reward)
+class RewardAdmin(admin.ModelAdmin):
+    list_display = ('title', 'cost', 'is_active', 'sort_order')
+    list_editable = ('cost', 'is_active', 'sort_order')
+
+
+@admin.register(RewardRedemption)
+class RewardRedemptionAdmin(admin.ModelAdmin):
+    list_display = ('user', 'reward', 'cost', 'status', 'created_at', 'handled_by')
+    list_filter = ('status', 'reward')
+    search_fields = ('user__username',)
+    readonly_fields = ('user', 'reward', 'cost', 'created_at')
+
+
+@admin.register(SocialClaim)
+class SocialClaimAdmin(admin.ModelAdmin):
+    list_display = ('user', 'network', 'status', 'created_at', 'reviewed_by')
+    list_filter = ('status', 'network')
+    search_fields = ('user__username',)
 
 
 

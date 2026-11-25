@@ -21,6 +21,8 @@ PDF = b'%PDF-1.4 test'
     MEDIA_ROOT=TMP_MEDIA,
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
     TASK_NOTIFY_EMAILS=['mentor@example.com'],
+    STAFF_NOTIFY_EMAILS=['mentor@example.com'],
+    EMAIL_SYNC=True,
     CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
     SECURE_SSL_REDIRECT=False,
     SESSION_COOKIE_SECURE=False,
@@ -138,6 +140,7 @@ class VisionsTests(TestCase):
         self.assertEqual(task.status, 'completed')
 
     # --- points ---
+    @override_settings(SOCIAL_POINTS_AUTO_AWARD=True)
     def test_social_points_once(self):
         self.client.force_login(self.student)
         for _ in range(3):
@@ -145,8 +148,7 @@ class VisionsTests(TestCase):
             self.assertEqual(r.url, 'https://t.me/visionskz')
         self.assertEqual(self.points(self.student), 100)
 
-    @override_settings(SOCIAL_POINTS_AUTO_AWARD=False)
-    def test_social_points_can_be_disabled(self):
+    def test_social_points_need_confirmation_by_default(self):
         self.client.force_login(self.student)
         self.client.get(reverse('django_app:check_subscription_youtube'))
         self.assertEqual(self.points(self.student), 0)
@@ -205,8 +207,10 @@ class VisionsTests(TestCase):
     def test_upload_valid_file(self):
         task = self.make_task(title='Sprint/../Review')
         self.client.force_login(self.student)
-        self.assertRedirects(self.upload(task), reverse('django_app:homework'))
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertRedirects(self.upload(task), reverse('django_app:homework'))
         task.refresh_from_db()
+        self.assertIsNotNone(task.submitted_at)
         self.assertEqual(task.status, 'pending')
         self.assertRegex(task.user_response_file.name, r'^tasks1/[^/]+\.pdf$')
         self.assertNotIn('..', task.user_response_file.name)
@@ -345,3 +349,245 @@ class ProductionReviewTests(TestCase):
         b.save()
         self.user.profile.refresh_from_db()
         self.assertEqual(self.user.profile.points, 300)
+
+
+
+@override_settings(
+    CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
+    ALLOWED_HOSTS=['testserver'], SECURE_SSL_REDIRECT=False,
+    SESSION_COOKIE_SECURE=False, CSRF_COOKIE_SECURE=False,
+    MEDIA_ROOT=tempfile.mkdtemp(), EMAIL_SYNC=True,
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    STAFF_NOTIFY_EMAILS=['mentor@example.com'], SITE_URL='https://example.com',
+)
+class FeatureTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        from django.conf import settings
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        cache.clear()
+        self.today = timezone.localtime().date()
+        self.student = User.objects.create_user('student', 'student@example.com', 'pass-12345')
+        self.mentor = User.objects.create_user('mentor', 'mentor@example.com', 'pass-12345', is_staff=True)
+
+    def make_task(self, **kw):
+        kw.setdefault('deadline', self.today + datetime.timedelta(days=3))
+        task = Task(user=self.student, title=kw.pop('title', 'Backlog'), **kw)
+        task.file.save('task.pdf', ContentFile(PDF), save=False)
+        task.save()
+        return task
+
+    def points(self):
+        self.student.profile.refresh_from_db()
+        return self.student.profile.points
+
+    # 1. Mentor review
+    def submitted_task(self):
+        task = self.make_task()
+        self.client.force_login(self.student)
+        self.client.post(reverse('django_app:upload_task', args=[task.id]),
+                         {'attachment': SimpleUploadedFile('a.pdf', PDF)})
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'pending')
+        return task
+
+    def test_review_accept(self):
+        task = self.submitted_task()
+        self.client.force_login(self.mentor)
+        self.assertContains(self.client.get(reverse('django_app:homework')), task.title)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(reverse('django_app:review_task', args=[task.id]), {'action': 'accept', 'comment': 'Отлично'})
+        self.assertRedirects(r, reverse('django_app:user_homework_detail', args=[self.student.id]))
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'completed')
+        self.assertIsNotNone(task.reviewed_at)
+        self.assertEqual(self.points(), 300)
+        self.assertTrue(any('student@example.com' in m.to for m in mail.outbox))
+        self.assertFalse(any(m.attachments for m in mail.outbox))
+
+    def test_review_return_requires_comment_and_allows_resubmit(self):
+        task = self.submitted_task()
+        self.client.force_login(self.mentor)
+        self.client.post(reverse('django_app:review_task', args=[task.id]), {'action': 'return', 'comment': ''})
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'pending')
+        self.client.post(reverse('django_app:review_task', args=[task.id]), {'action': 'return', 'comment': 'Добавьте цель'})
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'rejected')
+        self.assertTrue(Notification.objects.filter(user=self.student, message__contains='Добавьте цель').exists())
+        self.client.force_login(self.student)
+        self.client.post(reverse('django_app:upload_task', args=[task.id]), {'attachment': SimpleUploadedFile('b.pdf', PDF)})
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'pending')
+
+    def test_review_staff_only(self):
+        task = self.submitted_task()
+        self.client.force_login(self.student)
+        self.client.post(reverse('django_app:review_task', args=[task.id]), {'action': 'accept'})
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'pending')
+
+    # 2. Reminders / Telegram
+    def test_deadline_reminder_once_email_fallback(self):
+        from django.core.management import call_command
+        due = self.make_task(title='Due', deadline=self.today + datetime.timedelta(days=1))
+        self.make_task(title='Later', deadline=self.today + datetime.timedelta(days=5))
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            call_command('send_deadline_reminders', stdout=open('/dev/null', 'w'))
+            call_command('send_deadline_reminders', stdout=open('/dev/null', 'w'))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Due', mail.outbox[0].body)
+        due.refresh_from_db()
+        self.assertIsNotNone(due.reminder_sent_at)
+        due.deadline = self.today + datetime.timedelta(days=2)
+        due.save()
+        due.refresh_from_db()
+        self.assertIsNone(due.reminder_sent_at)
+
+    @override_settings(TELEGRAM_BOT_TOKEN='test-token', TELEGRAM_BOT_USERNAME='visions_bot')
+    def test_telegram_link_and_reminder(self):
+        from unittest import mock
+        from django.core.management import call_command
+        self.client.force_login(self.student)
+        r = self.client.post(reverse('django_app:telegram_connect'))
+        self.assertTrue(r.url.startswith('https://t.me/visions_bot?start='))
+        token = r.url.split('=', 1)[1]
+        updates = {'result': [{'update_id': 7, 'message': {'text': f'/start {token}', 'chat': {'id': 555, 'type': 'private'}}}]}
+        with mock.patch('django_app.management.commands.telegram_sync.telegram_api', return_value=updates), \
+                mock.patch('django_app.management.commands.telegram_sync.send_telegram') as sent:
+            call_command('telegram_sync', stdout=open('/dev/null', 'w'))
+        self.student.profile.refresh_from_db()
+        self.assertEqual(self.student.profile.telegram_chat_id, '555')
+        self.assertEqual(self.student.profile.telegram_link_token, '')
+        sent.assert_called_once()
+        self.make_task(title='Due', deadline=self.today)
+        with mock.patch('django_app.notify.telegram_api') as api:
+            call_command('send_deadline_reminders', stdout=open('/dev/null', 'w'))
+        self.assertEqual(api.call_args.kwargs['chat_id'], '555')
+
+    # 3. Rewards & social claims
+    def test_redeem_reward_balance_and_rank(self):
+        from .models import Reward, RewardRedemption
+        reward = Reward.objects.get(cost=3000)
+        self.student.profile.points = 3200
+        self.student.profile.save()
+        self.client.force_login(self.student)
+        self.client.post(reverse('django_app:redeem_reward', args=[reward.id]))
+        self.client.post(reverse('django_app:redeem_reward', args=[reward.id]))  # второй раз не хватит
+        self.assertEqual(RewardRedemption.objects.filter(user=self.student).count(), 1)
+        self.assertEqual(self.points(), 3200)  # рейтинг не меняется
+        self.assertEqual(self.student.profile.available_points(), 200)
+        red = RewardRedemption.objects.get()
+        self.client.force_login(self.mentor)
+        self.client.post(reverse('django_app:staff_requests'), {'kind': 'redemption', 'id': red.id, 'action': 'cancel'})
+        self.assertEqual(self.student.profile.available_points(), 3200)
+
+    def test_redeem_requires_post_and_login(self):
+        from .models import Reward
+        reward = Reward.objects.first()
+        self.assertEqual(self.client.post(reverse('django_app:redeem_reward', args=[reward.id])).status_code, 302)
+        self.client.force_login(self.student)
+        self.assertEqual(self.client.get(reverse('django_app:redeem_reward', args=[reward.id])).status_code, 405)
+
+    def test_social_claim_flow(self):
+        from .models import SocialClaim
+        self.client.force_login(self.student)
+        self.client.get(reverse('django_app:check_subscription_instagram'))
+        self.client.get(reverse('django_app:check_subscription_instagram'))
+        self.assertEqual(SocialClaim.objects.count(), 1)
+        self.assertEqual(self.points(), 0)
+        claim = SocialClaim.objects.get()
+        self.client.post(reverse('django_app:staff_requests'), {'kind': 'claim', 'id': claim.id, 'action': 'approve'})
+        self.assertEqual(self.points(), 0)  # студент не может подтвердить сам
+        self.client.force_login(self.mentor)
+        self.client.post(reverse('django_app:staff_requests'), {'kind': 'claim', 'id': claim.id, 'action': 'approve'})
+        self.client.post(reverse('django_app:staff_requests'), {'kind': 'claim', 'id': claim.id, 'action': 'approve'})
+        self.assertEqual(self.points(), 100)
+
+    # 4. Analytics
+    def test_analytics_staff_only_and_metrics(self):
+        from .analytics import cohort_report
+        self.make_task(title='Old', deadline=self.today - datetime.timedelta(days=2))
+        self.make_task(title='Done', is_approved=True)
+        report = cohort_report()
+        self.assertEqual(report['current']['tasks'], 2)
+        self.assertEqual(report['current']['submission_rate'], 50)
+        self.assertEqual(report['current']['overdue_rate'], 50)
+        self.client.force_login(self.student)
+        self.assertEqual(self.client.get(reverse('django_app:analytics')).status_code, 302)
+        self.client.force_login(self.mentor)
+        self.assertContains(self.client.get(reverse('django_app:analytics')), 'Done')
+        for name in ['staff_requests', 'rewards', 'homework']:
+            self.assertEqual(self.client.get(reverse(f'django_app:{name}')).status_code, 200, name)
+
+
+@override_settings(
+    CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
+    ALLOWED_HOSTS=['testserver'], SECURE_SSL_REDIRECT=False,
+    SESSION_COOKIE_SECURE=False, CSRF_COOKIE_SECURE=False, MEDIA_ROOT=tempfile.mkdtemp(),
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    TELEGRAM_BOT_TOKEN='SECRET-BOT-TOKEN', TELEGRAM_BOT_USERNAME='visions_bot', SITE_URL='https://example.com',
+)
+class FeatureReviewTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        from django.conf import settings
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        cache.clear()
+        self.student = User.objects.create_user('student', 'student@example.com', 'pass-12345')
+
+    def sync(self, text, chat_type='private'):
+        from unittest import mock
+        from django.core.management import call_command
+        updates = {'result': [{'update_id': 1, 'message': {'text': text, 'chat': {'id': 42, 'type': chat_type}}}]}
+        with mock.patch('django_app.management.commands.telegram_sync.telegram_api', return_value=updates), \
+                mock.patch('django_app.management.commands.telegram_sync.send_telegram'):
+            call_command('telegram_sync', stdout=open('/dev/null', 'w'))
+        self.student.profile.refresh_from_db()
+        return self.student.profile.telegram_chat_id
+
+    def connect(self):
+        self.client.force_login(self.student)
+        return self.client.post(reverse('django_app:telegram_connect')).url.split('=', 1)[1]
+
+    def test_telegram_token_rejected_from_group_chat(self):
+        token = self.connect()
+        self.assertEqual(self.sync(f'/start {token}', chat_type='group'), '')
+        self.assertEqual(self.sync(f'/start {token}'), '42')
+
+    def test_telegram_token_expires_and_is_single_use(self):
+        token = self.connect()
+        profile_qs = self.student.profile.__class__.objects.filter(user=self.student)
+        profile_qs.update(telegram_link_expires=timezone.now() - datetime.timedelta(minutes=1))
+        self.assertEqual(self.sync(f'/start {token}'), '')
+        token = self.connect()
+        self.assertEqual(self.sync(f'/start {token}'), '42')
+        profile_qs.update(telegram_chat_id='')
+        self.assertEqual(self.sync(f'/start {token}'), '')  # повторно тот же токен не работает
+
+    def test_bot_token_not_logged(self):
+        from unittest import mock
+        import requests as rq
+        from .notify import send_telegram
+        with mock.patch('django_app.notify.requests.post', side_effect=rq.ConnectionError(
+                'Max retries exceeded with url: /botSECRET-BOT-TOKEN/sendMessage')), \
+                self.assertLogs('django_app.notify', level='WARNING') as logs:
+            self.assertFalse(send_telegram('42', 'hi'))
+        self.assertNotIn('SECRET-BOT-TOKEN', '\n'.join(logs.output))
+
+    @override_settings(TELEGRAM_BOT_TOKEN='')
+    def test_cron_reminder_email_sent_synchronously(self):
+        from django.core.management import call_command
+        task = Task(user=self.student, title='Due', deadline=timezone.localtime().date())
+        task.file.save('t.pdf', ContentFile(PDF), save=False)
+        task.save()
+        mail.outbox.clear()
+        call_command('send_deadline_reminders', stdout=open('/dev/null', 'w'))  # без captureOnCommitCallbacks
+        self.assertEqual(len(mail.outbox), 1)

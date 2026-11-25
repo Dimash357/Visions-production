@@ -13,10 +13,21 @@
 ```bash
 pip install -r requirements.txt
 python manage.py check --deploy
-python manage.py migrate            # одна миграция 0013: добавляет Task.points_awarded
+python manage.py migrate            # 0013 (points_awarded) и 0014 (награды, заявки, Telegram, даты сдачи/проверки)
 python manage.py collectstatic --noinput   # обязательно: иначе нет нового CSS/JS
 sudo systemctl restart gunicorn      # или docker compose up -d --build
 ```
+
+## Фоновые задачи (cron)
+Очереди не нужны: письма уходят в фоновом потоке, Telegram и напоминания — командами по cron.
+```cron
+* * * * *  cd /app && /app/.venv/bin/python manage.py telegram_sync            # привязка чатов по /start
+5 * * * *  cd /app && /app/.venv/bin/python manage.py send_deadline_reminders  # напоминания за 24 ч
+```
+Для Telegram: создать бота у @BotFather, задать в `.env` `TELEGRAM_BOT_TOKEN` и `TELEGRAM_BOT_USERNAME`.
+Без бота напоминания уходят на e-mail студента. `SITE_URL` — адрес сайта для ссылок в напоминаниях.
+`SOCIAL_POINTS_AUTO_AWARD=False` (по умолчанию) — баллы за подписки только после подтверждения в «Заявках».
+`STAFF_NOTIFY_EMAILS` — кому приходят заявки на награды.
 
 ## nginx
 ```nginx
@@ -43,6 +54,9 @@ location / {
 - `https://<домен>/media/tasks/<любой файл>` → 404; кнопка «Скачать задание» работает.
 - Ментор: «Задания» → студент → «Скачать файл».
 - Стили загружены (иначе не выполнен `collectstatic`).
+- Ментор: «Задания» → «Проверить» → принять / вернуть с комментарием; студент видит статус и комментарий.
+- «Награды»: обмен при достаточном балансе; заявка появляется у сотрудника в «Заявках».
+- `python manage.py send_deadline_reminders` выводит `reminders: N` без ошибок.
 
 ## Откат
 Миграция 0013 только добавляет колонку и обратима; существующие данные не меняются.
@@ -52,8 +66,11 @@ location / {
 2. **Сохранить текущее состояние** (даже если есть бэкап до деплоя — в нём нет данных, внесённых после):
    `sqlite3 db.sqlite3 ".backup 'db.sqlite3.before-rollback-$(date +%F-%H%M)'"` и архив `media/`.
    Права на копии: `chmod 600` — в них хеши паролей и персональные данные; не класть в git и в публичные каталоги.
-3. **Откатить схему на новом коде**: `python manage.py migrate django_app 0012`
-   (удаляет только колонку `points_awarded`; задания, баллы и уведомления остаются).
+3. **Откатить схему на новом коде**: `python manage.py migrate django_app 0012`.
+   Задания, баллы, пользователи и уведомления остаются. Удаляются только данные новых функций:
+   заявки на награды и подписки, привязки Telegram, даты сдачи/проверки, флаги напоминаний и `points_awarded`.
+   Если эти данные нужны — откатывайте только до `0013` (`migrate django_app 0013`) или сохраните копию из шага 2.
+   Отключите cron-команды до отката кода.
 4. **Вернуть предыдущую версию кода**: `git checkout <предыдущий-коммит>`, `pip install -r requirements.txt`.
 5. **Секреты**: старый `settings.py` содержит пароль SMTP в коде — **не вписывать в него новый пароль**
    и не коммитить. Временно экспортировать его через переменную окружения на сервере невозможно
