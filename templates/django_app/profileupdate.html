@@ -12,9 +12,7 @@
 
         <div class="field">
             <span class="label" id="photo-label">Фото профиля</span>
-            {% if pform.instance.image %}
-            <img src="{{ pform.instance.image.url }}" alt="Текущее фото" width="96" height="96" style="width:96px;height:96px;border-radius:50%;object-fit:cover;display:block;margin-bottom:.6rem">
-            {% endif %}
+            <div style="margin:.2rem 0 .8rem">{% include 'partials/avatar.html' with p=pform.instance size='lg' %}</div>
             <div aria-labelledby="photo-label">{{ pform.image }}</div>
             <p class="help">JPG или PNG, квадратное фото смотрится лучше всего.</p>
             {{ pform.image.errors }}

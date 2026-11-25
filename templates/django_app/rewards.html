@@ -24,7 +24,10 @@
             <button type="submit" class="btn btn-primary" data-busy-label="Отправляем…">Обменять</button>
         </form>
         {% else %}
-        <p class="meta">Не хватает {{ reward.missing }} баллов</p>
+        <div class="reward-progress">
+            <span class="meter" role="img" aria-label="Накоплено {% widthratio balance reward.cost 100 %}%"><span style="width:{% widthratio balance reward.cost 100 %}%"></span></span>
+            <p>Не хватает {{ reward.missing }} баллов</p>
+        </div>
         {% endif %}
     </li>
     {% empty %}

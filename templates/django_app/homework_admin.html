@@ -59,7 +59,7 @@
         <tbody>
             {% for u in users %}
             <tr>
-                <td>{{ u.username|replace_underscore }}</td>
+                <td><span class="person">{% include 'partials/avatar.html' with p=u.profile size='sm' %}{{ u.username|replace_underscore }}</span></td>
                 <td class="num"><span class="points">{{ u.profile.points }}</span></td>
                 <td class="num">
                     <a href="{% url 'django_app:user_homework_detail' u.id %}" class="btn btn-ghost btn-sm">Открыть задания<span class="visually-hidden"> студента {{ u.username|replace_underscore }}</span></a>

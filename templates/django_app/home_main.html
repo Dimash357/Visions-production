@@ -16,17 +16,33 @@
             <a href="{% url 'django_app:home_main' %}?former=yes"{% if filter_former == 'yes' %} aria-current="true"{% endif %}>Выпускники</a>
         </nav>
 
+        {% if page_obj.number == 1 and page_obj.object_list|length >= 3 %}
+        <div class="podium" aria-label="Тройка лидеров">
+            {% for p in page_obj.object_list|slice:":3" %}
+            <div class="podium-place{% if p.user_id == request.user.id %} is-me{% endif %}">
+                {% include 'partials/avatar.html' with p=p size='lg' %}
+                <span class="podium-name">{{ p.user.username|replace_underscore }}</span>
+                <span class="points" aria-label="{{ p.points }} баллов">{{ p.points }}</span>
+                <span class="podium-step" aria-label="Место {{ forloop.counter }}">{{ forloop.counter }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <ol class="leaderboard" start="{{ page_obj.start_index }}">
             {% for user in page_obj %}
             {% with place=forloop.counter0|add:page_obj.start_index %}
-            <li>
+            {% if page_obj.number != 1 or page_obj.object_list|length < 3 or place > 3 %}
+            <li{% if user.user_id == request.user.id %} class="is-me"{% endif %}>
                 <span class="rank{% if place <= 3 %} rank-{{ place }}{% endif %}" aria-label="Место {{ place }}">{{ place }}</span>
+                {% include 'partials/avatar.html' with p=user size='md' %}
                 <span class="name">
                     {{ user.user.username|replace_underscore }}
                     {% if user.points == 3000 %}<span class="note">3000 баллов — можно забрать встречу с ментором</span>{% endif %}
                 </span>
                 <span class="points" aria-label="{{ user.points }} баллов">{{ user.points }}</span>
             </li>
+            {% endif %}
             {% endwith %}
             {% empty %}
             <li class="empty">В этой группе пока никого нет.</li>
@@ -57,7 +73,7 @@
             <ul class="feed notification-list">
                 {% for notification in notifications %}
                 <li class="notification-item" data-id="{{ notification.id }}">
-                    <span class="dot{% if not notification.is_read %} notification-badge{% endif %}" aria-hidden="true"></span>
+                    <span class="dot {% if "одобрено" in notification.message or "получили" in notification.message or "Награда" in notification.message %}k-reward{% elif "отняли" in notification.message %}k-penalty{% elif "доработку" in notification.message %}k-rework{% else %}k-task{% endif %}{% if not notification.is_read %} notification-badge{% endif %}" aria-hidden="true"></span>
                     <span>
                         {{ notification.message }}
                         <time datetime="{{ notification.created_at|date:'c' }}">{{ notification.created_at|date:"d.m.Y, H:i" }}</time>

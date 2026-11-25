@@ -2,9 +2,10 @@
 {% block title %}Мой профиль{% endblock %}
 
 {% block content %}
-<section class="panel" aria-labelledby="profile-name">
+<section class="panel profile-hero" aria-labelledby="profile-name">
+    <div class="profile-cover" aria-hidden="true"></div>
     <div class="profile-head">
-        <img class="avatar-lg" src="{{ user.profile.image.url }}" alt="Фото профиля" width="112" height="112">
+        {% include 'partials/avatar.html' with p=user.profile size='xl' %}
         <div>
             <h1 id="profile-name">{{ user.username }}</h1>
             <p class="meta">{{ user.email }}{% if user.profile.city %}, {{ user.profile.city }}{% endif %}</p>

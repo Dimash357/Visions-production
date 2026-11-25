@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" fill="none" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="warm" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#D8352A"/>
+      <stop offset=".55" stop-color="#EE7A26"/>
+      <stop offset="1" stop-color="#F7B92C"/>
+    </linearGradient>
+    <linearGradient id="cool" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0FA3FA"/>
+      <stop offset=".6" stop-color="#2468DA"/>
+      <stop offset="1" stop-color="#3C4FA8"/>
+    </linearGradient>
+    <linearGradient id="blend" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#E5452B" stop-opacity=".0"/>
+      <stop offset=".45" stop-color="#8A6378" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#0A9BF5" stop-opacity=".9"/>
+    </linearGradient>
+  </defs>
+  <path d="M-60 238C150 92 468 46 742 120c190 52 330 120 520 40" stroke="url(#warm)" stroke-width="58" stroke-linecap="round"/>
+  <path d="M-40 292c250 40 520-6 760-92 190-68 360-60 520 20" stroke="url(#blend)" stroke-width="40" stroke-linecap="round"/>
+  <path d="M120 360c240 30 480-10 720-120 140-64 270-66 400-14" stroke="url(#cool)" stroke-width="46" stroke-linecap="round"/>
+  <path d="M60 196C320 70 640 52 900 150" stroke="#fff" stroke-opacity=".35" stroke-width="2" stroke-linecap="round"/>
+</svg>

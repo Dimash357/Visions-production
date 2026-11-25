@@ -1,0 +1,2 @@
+{# Аватар: фото, а если фото нет или оно не загрузилось — инициал на фирменном градиенте. Параметры: p (profile), size (sm|md|lg|xl) #}
+<span class="ava ava-{{ size|default:'md' }}" data-initial="{{ p.user.username|first|upper }}" aria-hidden="true">{% if p.image and p.image.name != 'profile_images/default.jpg' %}<img src="{{ p.image.url }}" alt="" loading="lazy" decoding="async" onerror="this.remove()">{% endif %}</span>

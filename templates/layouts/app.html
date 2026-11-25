@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@600&display=swap">
-    <link rel="stylesheet" href="{% static 'css/visions.css' %}?v=4">
+    <link rel="stylesheet" href="{% static 'css/visions.css' %}?v=5">
     {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -41,7 +41,7 @@
             <ul class="nav-user">
             {% if request.user.is_authenticated %}
                 <li><a href="{% url 'django_app:profile' %}"{% if current == 'profile' or current == 'profile_update' %} aria-current="page"{% endif %}>
-                    <img class="avatar" src="{{ request.user.profile.image.url }}" alt="" width="28" height="28">{{ request.user.username }}</a></li>
+                    {% include 'partials/avatar.html' with p=request.user.profile size='sm' %}{{ request.user.username }}</a></li>
                 <li><form method="post" action="{% url 'django_app:logout' %}" class="nav-form">{% csrf_token %}<button type="submit" class="nav-logout">Выйти</button></form></li>
             {% else %}
                 <li><a href="{% url 'django_app:login' %}">Войти</a></li>
@@ -76,7 +76,7 @@
     </div>
 </footer>
 {% endblock footer %}
-<script src="{% static 'js/visions.js' %}?v=3" defer></script>
+<script src="{% static 'js/visions.js' %}?v=4" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
